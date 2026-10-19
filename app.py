@@ -2,7 +2,6 @@ from datetime import datetime
 import os
 from fpdf import FPDF
 import openpyxl
-from openpyxl.utils import range_boundaries
 import pandas as pd
 import streamlit as st
 
@@ -342,7 +341,8 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
-      " datos, firme y apruebe para completar su plantilla de Excel oficial."
+      " datos y apruebe para rellenar campo por campo su plantilla oficial de"
+      " Excel."
   )
 
   clave_ingresada = st.text_input(
@@ -397,7 +397,7 @@ with tab2:
                 "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
             )
             aprobar = st.form_submit_button(
-                "Aprobar y Completar Checklist Oficial de Excel 🛡️",
+                "Aprobar y Rellenar Plantilla Oficial de Excel 🛡️",
                 type="primary",
             )
 
@@ -408,8 +408,7 @@ with tab2:
               )
             else:
               with st.spinner(
-                  "Completando plantilla de Excel oficial y generando"
-                  " certificado..."
+                  "Rellenando tu plantilla oficial de Excel campo por campo..."
               ):
                 carpeta_base = "./Registros_Oficiales"
                 subcarpeta_lote = (
@@ -479,13 +478,14 @@ with tab2:
                   else:
                     os.rename(row["RutaPdfCert"], ruta_cert_final)
 
-                # COMPLETAR TU PLANTILLA OFICIAL DE EXCEL (MANEJANDO CELDAS COMBINADAS DE FORMA SEGURA)
+                # RELLENAR CAMPO POR CAMPO TU PLANTILLA OFICIAL DE EXCEL
                 prefijo_archivo = (
                     f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
                     )
                 )
                 
+                # Buscar tu archivo de checklist oficial en el repositorio
                 plantillas_disponibles = [
                     f for f in os.listdir('.') 
                     if f.endswith('.xlsx') and f != "Maestro_Materiales_Proveedores (2).xlsx"
@@ -500,35 +500,39 @@ with tab2:
                   wb = openpyxl.load_workbook(ruta_plantilla)
                   ws = wb.active
                   
+                  # Diccionario con los datos exactos del ingreso
                   datos_a_llenar = {
-                      "Planta": row["Planta"],
-                      "Tipo de Material": row["TipoMaterial"],
-                      "Material": row["NombreMaterial"],
-                      "Proveedor": row["Proveedor"],
-                      "Lote": row["LoteProveedor"],
-                      "Cantidad": row["Cantidad"],
-                      "Unidad": row["Unidad"],
-                      "Temperatura": row["Temperatura"],
-                      "Fecha de Producción": row["FechaProduccion"],
-                      "Fecha de Vencimiento": row["FechaVencimiento"],
-                      "Criticidad": row["Criticidad"],
-                      "Operador": row["Responsable"],
-                      "Supervisor": nombre_supervisor,
-                      "Fecha Aprobación": row["Fecha"]
+                      "planta": row["Planta"],
+                      "tipo": row["TipoMaterial"],
+                      "material": row["NombreMaterial"],
+                      "proveedor": row["Proveedor"],
+                      "lote": row["LoteProveedor"],
+                      "cantidad": row["Cantidad"],
+                      "unidad": row["Unidad"],
+                      "temperatura": row["Temperatura"],
+                      "produccion": row["FechaProduccion"],
+                      "vencimiento": row["FechaVencimiento"],
+                      "criticidad": row["Criticidad"],
+                      "operador": row["Responsable"],
+                      "supervisor": nombre_supervisor,
+                      "fecha": row["Fecha"]
                   }
                   
-                  # Escritura segura evitando errores con celdas combinadas
-                  for row_idx in range(1, min(ws.max_row + 1, 40)):
-                    for col_idx in range(1, min(ws.max_column + 1, 15)):
+                  # Barrido inteligente campo por campo para rellenar celdas adyacentes a las etiquetas
+                  for row_idx in range(1, ws.max_row + 1):
+                    for col_idx in range(1, ws.max_column + 1):
                       try:
-                        cell_val = str(ws.cell(row=row_idx, column=col_idx).value).strip().lower()
-                        for k, v in datos_a_llenar.items():
-                          if k.lower() in cell_val:
-                            next_cell = ws.cell(row=row_idx, column=col_idx + 1)
-                            # Comprobar si la celda no es parte de un rango combinado restringido
-                            next_cell.value = v
+                        cell = ws.cell(row=row_idx, column=col_idx)
+                        cell_val = str(cell.value).strip().lower()
+                        
+                        for clave, valor in datos_a_llenar.items():
+                          if clave in cell_val:
+                            # Rellenar la celda de la derecha o la celda inferior según el formato típico de checklist
+                            target_cell = ws.cell(row=row_idx, column=col_idx + 1)
+                            if target_cell.value is None or str(target_cell.value).strip() == "":
+                              target_cell.value = valor
                       except Exception:
-                        pass # Ignorar de forma segura cualquier celda protegida/combinada
+                        pass
 
                   wb.save(ruta_excel_final)
                 else:
@@ -552,7 +556,7 @@ with tab2:
                 guardar_pendientes(df_p)
 
                 st.success(
-                    "🎉 ¡Checklist de Excel completado y firmado con éxito! "
+                    "🎉 ¡Plantilla de Excel oficial rellenada y firmada con éxito! "
                     f"Guardado en: `{ruta_destino}`"
                 )
                 st.rerun()
@@ -567,8 +571,8 @@ with tab2:
 with tab3:
   st.header("🔍 Buscador y Consulta de Registros Oficiales")
   st.markdown(
-      "Consulte el historial de recepciones aprobadas, descargue los"
-      " checklists en Excel completados y los certificados firmados."
+      "Consulte el historial de recepciones aprobadas, descargue su checklist"
+      " oficial de Excel rellenado y los certificados firmados."
   )
 
   df_p = cargar_pendientes()
@@ -627,7 +631,7 @@ with tab3:
       ):
         col_d1, col_d2 = st.columns(2)
 
-        # Botón para descargar el Excel oficial completado
+        # Botón para descargar el Excel oficial completado campo por campo
         with col_d1:
           if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and str(row["RutaExcel"]).strip() != "" and os.path.exists(str(row["RutaExcel"])):
             with open(row["RutaExcel"], "rb") as f:
