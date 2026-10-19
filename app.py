@@ -478,24 +478,30 @@ with tab2:
                   else:
                     os.rename(row["RutaPdfCert"], ruta_cert_final)
 
-                # RELLENAR EXACTAMENTE LAS CELDAS DE TU CHECKLIST OFICIAL
+                # RELLENAR EXACTAMENTE LAS CELDAS DE TU CHECKLIST OFICIAL (BUSCANDO ARCHIVO R ICC)
                 prefijo_archivo = (
                     f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
                     )
                 )
                 
-                ruta_plantilla = "R ICC 14-1 Check List Recepción Materiales.xlsx"
+                # Búsqueda automática del checklist oficial en el repositorio
+                archivos_repo = os.listdir('.')
+                plantillas_disponibles = [
+                    f for f in archivos_repo 
+                    if f.endswith('.xlsx') and ("R ICC" in f or "Check" in f or "Checklist" in f) and f != "Maestro_Materiales_Proveedores (2).xlsx"
+                ]
+                
+                ruta_plantilla = plantillas_disponibles[0] if plantillas_disponibles else "R ICC 14-1 Check List Recepción Materiales.xlsx"
                 ruta_excel_final = os.path.join(
                     ruta_destino, f"{prefijo_archivo}.xlsx"
                 )
 
                 if os.path.exists(ruta_plantilla):
                   wb = openpyxl.load_workbook(ruta_plantilla)
-                  # Usar la pestaña "Recepción" o la activa
                   ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
                   
-                  # Inyección exacta campo por campo basada en las coordenadas de tu formato
+                  # Inyección exacta campo por campo en las coordenadas de tu formato
                   ws['C5'] = row['Fecha']                   # Fecha de recepción
                   ws['C16'] = row['Proveedor']              # Proveedor
                   ws['C17'] = row['NombreMaterial']         # Material
