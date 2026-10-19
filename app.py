@@ -62,6 +62,8 @@ def cargar_pendientes():
         "Estado",
         "FirmaCalidad",
         "RutaCarpeta",
+        "RutaExcel",
+        "RutaPdfCert",
     ])
 
 
@@ -285,7 +287,9 @@ with tab1:
                 "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "Estado": "Pendiente",
                 "FirmaCalidad": "Sin firmar",
-                "RutaCarpeta": item["RutaTemp"],
+                "RutaCarpeta": "",
+                "RutaExcel": "",
+                "RutaPdfCert": item["RutaTemp"],
             }
             df_p = pd.concat(
                 [df_p, pd.DataFrame([nuevo_registro])], ignore_index=True
@@ -312,8 +316,8 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
-      " datos, firme y apruebe para generar la jerarquía de carpetas y el Excel"
-      " oficial."
+      " datos, firme y apruebe para generar la jerarquía de carpetas, el Excel"
+      " y el PDF."
   )
 
   clave_ingresada = st.text_input(
@@ -331,7 +335,7 @@ with tab2:
     if len(pendientes) == 0:
       st.info(
           "No hay registros pendientes de aprobación en este momento."
-          " (Recuerda ingresar un nuevo registro en la Pestaña 1)."
+          " (Puedes ingresar nuevos registros en la Pestaña 1)."
       )
     else:
       for index, row in pendientes.iterrows():
@@ -355,15 +359,13 @@ with tab2:
             st.write(f"**Operador:** {row['Responsable']}")
             st.write(f"**Fecha Ingreso:** {row['Fecha']}")
 
-          if os.path.exists(str(row["RutaCarpeta"])):
-            if row["RutaCarpeta"].endswith((".jpg", ".jpeg", ".png")):
+          if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
+            if str(row["RutaPdfCert"]).endswith((".jpg", ".jpeg", ".png")):
               st.image(
-                  row["RutaCarpeta"], caption="Certificado Adjunto", width=350
+                  row["RutaPdfCert"], caption="Certificado Adjunto", width=350
               )
             else:
-              st.write(
-                  "📄 Archivo PDF del certificado adjunto listo para procesar."
-              )
+              st.write("📄 Certificado adjunto disponible.")
 
           with st.form(f"form_firma_{row['ID']}"):
             nombre_supervisor = st.text_input(
@@ -383,7 +385,6 @@ with tab2:
               with st.spinner(
                   "Generando estructura de carpetas, PDF y Excel oficial..."
               ):
-                # 1. Definir estructura de carpetas: Planta -> TipoMaterial -> NombreMaterial -> Lote_Nombre
                 carpeta_base = "./Registros_Oficiales"
                 subcarpeta_lote = (
                     f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(
@@ -400,14 +401,18 @@ with tab2:
                 )
                 os.makedirs(ruta_destino, exist_ok=True)
 
-                # 2. Generar Certificado PDF firmado
-                nombre_cert_oficial = f"Certificado_{row['LoteProveedor']}.pdf"
+                # Generar Certificado PDF firmado
+                nombre_cert_oficial = (
+                    f"Certificado_Firmado_{row['LoteProveedor']}.pdf"
+                )
                 ruta_cert_final = os.path.join(
                     ruta_destino, nombre_cert_oficial
                 )
 
-                if os.path.exists(str(row["RutaCarpeta"])):
-                  if row["RutaCarpeta"].endswith((".jpg", ".jpeg", ".png")):
+                if row["RutaPdfCert"] and os.path.exists(
+                    str(row["RutaPdfCert"])
+                ):
+                  if str(row["RutaPdfCert"]).endswith((".jpg", ".jpeg", ".png")):
                     pdf = FPDF()
                     pdf.add_page()
                     pdf.set_font("Arial", "B", 14)
@@ -443,12 +448,12 @@ with tab2:
                         "C",
                     )
                     pdf.ln(5)
-                    pdf.image(row["RutaCarpeta"], x=15, y=50, w=180)
+                    pdf.image(row["RutaPdfCert"], x=15, y=50, w=180)
                     pdf.output(ruta_cert_final)
                   else:
-                    os.rename(row["RutaCarpeta"], ruta_cert_final)
+                    os.rename(row["RutaPdfCert"], ruta_cert_final)
 
-                # 3. Generar archivo Excel basado en tu plantilla oficial
+                # Generar Excel Oficial basado en la plantilla
                 prefijo_archivo = (
                     f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
@@ -462,11 +467,9 @@ with tab2:
                 if os.path.exists(ruta_plantilla):
                   wb = openpyxl.load_workbook(ruta_plantilla)
                   ws = wb.active
-                  # Inyección inteligente opcional en celdas si deseas (puedes ajustar según tu formato)
-                  # Por seguridad guardamos copia exacta con los datos oficiales listos
+                  # Opcional: Inyectar datos clave si tu plantilla lo requiere
                   wb.save(ruta_excel_final)
                 else:
-                  # Respaldo si faltara la plantilla
                   df_resp = pd.DataFrame([row])
                   df_resp.to_excel(ruta_excel_final, index=False)
 
@@ -476,11 +479,15 @@ with tab2:
                     nombre_supervisor
                 )
                 df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = ruta_destino
+                df_p.loc[df_p["ID"] == row["ID"], "RutaExcel"] = ruta_excel_final
+                df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = (
+                    ruta_cert_final
+                )
                 guardar_pendientes(df_p)
 
                 st.success(
                     "🎉 ¡Registro aprobado con éxito! Archivos generados y"
-                    f" guardados en la ruta: `{ruta_destino}`"
+                    f" guardados en: `{ruta_destino}`"
                 )
                 st.rerun()
   elif clave_ingresada == "":
@@ -494,8 +501,8 @@ with tab2:
 with tab3:
   st.header("🔍 Buscador y Consulta de Registros Oficiales")
   st.markdown(
-      "Consulte el historial de recepciones aprobadas filtrando por lote,"
-      " material o proveedor."
+      "Consulte el historial de recepciones aprobadas, descargue los"
+      " checklists en Excel y los certificados firmados."
   )
 
   df_p = cargar_pendientes()
@@ -543,3 +550,43 @@ with tab3:
         ]],
         use_container_width=True,
     )
+
+    st.markdown("---")
+    st.subheader("📥 Descarga de Archivos Oficiales por Registro")
+
+    for idx, row in resultado.iterrows():
+      with st.expander(
+          f"📁 Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']}"
+          f" | Aprobado por: {row['FirmaCalidad']}"
+      ):
+        col_d1, col_d2 = st.columns(2)
+
+        # Botón para descargar el Excel oficial
+        with col_d1:
+          if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and os.path.exists(str(row["RutaExcel"])):
+            with open(row["RutaExcel"], "rb") as f:
+              st.download_button(
+                  label="📊 Descargar Checklist Excel Oficial",
+                  data=f,
+                  file_name=os.path.basename(row["RutaExcel"]),
+                  mime=(
+                      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  ),
+                  key=f"dl_excel_{row['ID']}",
+              )
+          else:
+            st.info("Archivo Excel en proceso o no disponible.")
+
+        # Botón para descargar el PDF del Certificado firmado
+        with col_d2:
+          if "RutaPdfCert" in row and pd.notna(row["RutaPdfCert"]) and os.path.exists(str(row["RutaPdfCert"])):
+            with open(row["RutaPdfCert"], "rb") as f:
+              st.download_button(
+                  label="📄 Descargar Certificado Firmado (PDF)",
+                  data=f,
+                  file_name=os.path.basename(row["RutaPdfCert"]),
+                  mime="application/pdf",
+                  key=f"dl_pdf_{row['ID']}",
+              )
+          else:
+            st.info("Certificado PDF en proceso o no disponible.")
