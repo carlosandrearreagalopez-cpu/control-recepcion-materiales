@@ -194,7 +194,7 @@ def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
             pdf.cell(3, 3, 'X', 0, 0, 'C')
-        curr_x += 16
+        curr_x += 14.5  # Espaciado optimizado para que encaje perfecto dentro de los 100mm
 
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
     n = len(opts)
@@ -292,27 +292,27 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo (Pregunta 1) - Espacio ajustado para evitar solapamiento
+    # Marchamo (Pregunta 1) - Opciones reubicadas en x=50 para que N/A quede dentro del cuadro (100mm)
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
-    pdf.cell(50, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
+    pdf.cell(40, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
     
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
-    dibujar_opciones_cabecera(pdf, 62, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
+    dibujar_opciones_cabecera(pdf, 50, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
 
     pdf.set_xy(15, y_start + h_row)
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
     val_marchamo = str(row.get('Marchamo', ''))
     pdf.cell(55, h_row, val_marchamo if val_marchamo != 'nan' else '', 'B', 0, 'C')
 
-    # Candado (Pregunta 2) - Espacio ajustado para evitar solapamiento
+    # Candado (Pregunta 2) - Opciones reubicadas en x=155 para encajar perfectamente
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
-    pdf.cell(50, h_row, '¿El candado se encuentra alterado?', 0, 0)
+    pdf.cell(40, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
     idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
-    dibujar_opciones_cabecera(pdf, 167, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
+    dibujar_opciones_cabecera(pdf, 155, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
 
     pdf.set_xy(200, y_start + h_row/2)
     pdf.set_font('Arial', 'B', 7)
@@ -417,7 +417,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.set_font('Arial', '', 7)
         pdf.cell(57, h_row, accion, 1, 1, 'C')
         
-    # --- TEMPERATURAS (VERIFICA SI APLICA O MARCA N/A) ---
+    # --- TEMPERATURAS ---
     temp_trans = str(row.get('TempTransporte', 'N/A'))
     temp_mat = str(row.get('TempMaterial', 'N/A'))
     
@@ -429,7 +429,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(130, h_row, '¿El transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
     pdf.cell(55, h_row, '', 'LTR', 0)
     
-    # Si temperatura es N/A, marca índice 2 (N/A), de lo contrario 0 (SI)
     idx_temp = 2 if (temp_trans == "N/A" or temp_trans == "nan" or not temp_trans) else 0
     dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
     
@@ -590,7 +589,6 @@ with tab1:
     df_material = df_prov[df_prov[col_material] == material_sel]
     criticidad_val = str(df_material.iloc[0][col_criticidad]) if col_criticidad and not df_material.empty else "N/A"
 
-    # Palabras clave estrictas para habilitar temperatura (frescos, lácteos, pulpas, congelados, refrigerados, carne, etc.)
     palabras_clave_temp = ["pulpa", "concentrado", "leche", "refrigerado", "congelado", "fresco", "crema", "mantequilla", "queso", "carne", "pollo", "embutido"]
     requiere_temperatura = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_temp)
 
@@ -875,7 +873,7 @@ with tab4:
   aprobados_excel = df_p[df_p["Estado"] == "Aprobado"].copy() if not df_p.empty else pd.DataFrame()
 
   if len(aprobados_excel) == 0:
-    st.info("No information available.")
+    st.info("No hay información suficiente.")
   else:
     columnas_reporte = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor", "LoteProveedor", 
