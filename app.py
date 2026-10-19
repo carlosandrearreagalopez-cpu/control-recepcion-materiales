@@ -119,25 +119,25 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
 # ------------------------------------------
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
-    """Dibuja opciones distribuidas exactamente en el espacio reservado (55mm)."""
+    """Dibuja opciones (SI/NO/N/A o SI/NO) con posiciones fijas absolutas para evitar desalineaciones."""
     curr_x = x_start
     ancho_bloque = 55.0 / len(opts)
     for i, opt in enumerate(opts):
-        pdf.set_xy(curr_x, y)
         pdf.set_font('Arial', '', 7)
-        w_text = pdf.get_string_width(opt)
-        
-        # Desplazar ligeramente a la izquierda el texto para evitar que colisione con la caja
+        # Posición para el texto de la opción
         pdf.set_xy(curr_x, y)
         pdf.cell(ancho_bloque - 4, h_row, opt, 0, 0, 'R')
         
+        # Posición exacta para la cajita cuadrada a la derecha del texto
         box_x = curr_x + ancho_bloque - 3.5
         box_y = y + (h_row - 3) / 2
         pdf.rect(box_x, box_y, 3, 3)
+        
         if i == idx_checked:
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
             pdf.cell(3, 3, 'X', 0, 0, 'C')
+            
         curr_x += ancho_bloque
 
 def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
@@ -214,6 +214,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
+    # Marchamo (Pregunta 1)
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
     pdf.cell(50, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
@@ -226,6 +227,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
     pdf.cell(55, h_row, str(row.get('Marchamo', '')), 'B', 0, 'C')
 
+    # Candado (Pregunta 2)
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
     pdf.cell(40, h_row, '¿El candado se encuentra alterado?', 0, 0)
@@ -386,7 +388,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     pdf.ln(2)
     
-    # --- RESULTADO, OBSERVACIONES Y FIRMAS ---
+    # --- RESULTADO Y OBSERVACIONES ---
     y_curr = pdf.get_y()
     pdf.rect(10, y_curr, 277, 8)
     pdf.set_xy(10, y_curr+2)
@@ -400,42 +402,42 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS ---
+    # --- ESPACIO DE FIRMAS PERFECTAMENTE ESTRUCTURADO ---
     pdf.ln(15) 
     y_linea = pdf.get_y()
 
-    # 1. Dibujar las líneas
-    pdf.line(55, y_linea, 115, y_linea)   
-    pdf.line(180, y_linea, 240, y_linea)  
+    # 1. Dibujar las líneas base de firma
+    pdf.line(50, y_linea, 120, y_linea)   # Línea Operador
+    pdf.line(170, y_linea, 240, y_linea)  # Línea Supervisor
 
-    # 2. Insertar Imágenes de las firmas ENCIMA de la línea
+    # 2. Insertar Imágenes de las firmas exactamente centradas sobre la línea
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
-            pdf.image(ruta_firma_op, x=65, y=y_linea - 14, w=40, h=13)
+            pdf.image(ruta_firma_op, x=60, y=y_linea - 14, w=50, h=13)
         except Exception: pass
         
     ruta_firma_sup = str(row.get('RutaFirmaSup', ''))
     if ruta_firma_sup and os.path.exists(ruta_firma_sup):
         try:
-            pdf.image(ruta_firma_sup, x=190, y=y_linea - 14, w=40, h=13)
+            pdf.image(ruta_firma_sup, x=180, y=y_linea - 14, w=50, h=13)
         except Exception: pass
 
-    # 3. Nombres impresos justo ENCIMA de la línea 
-    pdf.set_xy(55, y_linea - 4)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(60, 4, str(row.get('Responsable', '')), 0, 0, 'C')
-    
-    pdf.set_xy(180, y_linea - 4)
-    pdf.cell(60, 4, supervisor, 0, 0, 'C')
-
-    # 4. Textos de "Nombre de la persona" y "Vo. Bo." DEBAJO de la línea
-    pdf.set_xy(10, y_linea + 1)
+    # 3. Etiquetas de descripción DEBAJO de cada línea
+    pdf.set_xy(35, y_linea + 2)
     pdf.set_font('Arial', 'B', 8)
-    pdf.cell(45, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'L')
+    pdf.cell(80, 4, 'Nombre de la persona que realiza la recepción', 0, 0, 'C')
     
-    pdf.set_xy(150, y_linea + 1)
-    pdf.cell(30, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
+    pdf.set_xy(165, y_linea + 2)
+    pdf.cell(80, 4, 'Vo. Bo. Calidad', 0, 0, 'C')
+
+    # 4. Nombre del responsable / supervisor impreso justo DEBAJO de su etiqueta
+    pdf.set_xy(35, y_linea + 6)
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
+    
+    pdf.set_xy(165, y_linea + 6)
+    pdf.cell(80, 4, supervisor, 0, 0, 'C')
 
     pdf.output(ruta_guardado_temp)
 
