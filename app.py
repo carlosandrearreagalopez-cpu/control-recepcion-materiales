@@ -69,7 +69,7 @@ def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
 
-# Inicializar la lista temporal en la sesión para el carrito de ingresos múltiples
+# Inicializar carrito temporal en sesión
 if "items_ingreso_actual" not in st.session_state:
   st.session_state.items_ingreso_actual = []
 
@@ -117,7 +117,7 @@ with tab1:
         "Criticidad" if "Criticidad" in df_db.columns else None
     )
 
-    # 1. Jerarquía Principal: Planta -> Tipo de Material -> Proveedor -> Material
+    # Jerarquía: Planta -> Tipo de Material -> Proveedor -> Material
     plantas = df_db[col_planta].dropna().unique()
     planta_sel = st.selectbox("Planta", plantas)
 
@@ -130,12 +130,10 @@ with tab1:
       df_tipo = df_planta[df_planta[col_tipo] == tipo_mat_sel]
 
     with col2:
-      # Proveedor primero para agrupar
       proveedores_disponibles = df_tipo[col_proveedor].dropna().unique()
       proveedor_sel = st.selectbox("Proveedor", proveedores_disponibles)
       df_prov = df_tipo[df_tipo[col_proveedor] == proveedor_sel]
 
-    # Materiales que ofrece este proveedor en este tipo y planta
     materiales_disponibles = df_prov[col_material].dropna().unique()
     material_sel = st.selectbox(
         "Nombre del Material (Producto)", materiales_disponibles
@@ -148,7 +146,14 @@ with tab1:
 
     st.info(f"🏷️ **Criticidad Asociada al Material:** {criticidad_val}")
 
-    # Formulario para capturar los datos específicos del ítem actual
+    # Evaluar si requiere control de temperatura (Pulpa, Concentrado, Leche)
+    material_lower = str(material_sel).lower()
+    tipo_lower = str(tipo_mat_sel).lower()
+    requiere_temperatura = any(
+        kw in material_lower or kw in tipo_lower
+        for kw in ["pulpa", "concentrado", "leche", "refrigerado", "congelado"]
+    )
+
     with st.form("form_item_recepcion"):
       st.subheader("2. Datos del Lote y Cantidades")
       c3, c4, c5 = st.columns(3)
@@ -173,15 +178,14 @@ with tab1:
         fecha_vencimiento = st.date_input("Fecha de Vencimiento / Caducidad")
 
       temperatura = "N/A"
-      if (
-          "materia prima" in str(tipo_mat_sel).lower()
-          or "concentrado" in str(material_sel).lower()
-          or "pulpa" in str(material_sel).lower()
-      ):
+      if requiere_temperatura:
         st.markdown("---")
-        st.subheader("❄️ Control de Temperatura")
+        st.subheader("❄️ Control de Temperatura (Requerido para este material)")
         temperatura = st.number_input(
-            "Temperatura de Recepción (°C)", value=4.0, format="%.1f"
+            "Temperatura de Recepción (°C)",
+            value=4.0,
+            format="%.1f",
+            help="Medición requerida para pulpa, concentrado o leche.",
         )
 
       agregar_item = st.form_submit_button(
@@ -210,7 +214,7 @@ with tab1:
             f"✅ ¡Producto '{material_sel}' agregado a la lista temporal!"
         )
 
-    # MOSTRAR LO QUE LLEVA AGREGADO (CARRITO)
+    # Resumen de lo agregado (Carrito)
     if len(st.session_state.items_ingreso_actual) > 0:
       st.markdown("---")
       st.subheader("📋 Resumen de Productos Agregados en este Ingreso")
@@ -222,13 +226,15 @@ with tab1:
         st.rerun()
 
       st.markdown("---")
-      st.subheader("3. Finalizar y Enviar a Calidad")
+      st.subheader(
+          "3. Finalizar Ingreso (Responsable y Certificado de Calidad)"
+      )
       with st.form("form_finalizar_envio"):
         responsable = st.text_input(
             "Operador Responsable", placeholder="Tu Nombre Completo"
         )
         certificado_file = st.file_uploader(
-            "Adjuntar Certificado de Calidad del Proveedor (Imagen o PDF)",
+            "📎 Adjuntar Certificado de Calidad del Proveedor (Imagen o PDF)",
             type=["jpg", "jpeg", "png", "pdf"],
         )
         enviar_todo = st.form_submit_button(
@@ -254,7 +260,6 @@ with tab1:
           df_p = cargar_pendientes()
           nuevo_id = len(df_p) + 1 if not df_p.empty else 1
 
-          # Guardar cada ítem del carrito como un registro pendiente
           for item in st.session_state.items_ingreso_actual:
             nuevo_registro = {
                 "ID": nuevo_id,
