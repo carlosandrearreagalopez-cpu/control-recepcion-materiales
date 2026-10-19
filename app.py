@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 import streamlit as st
 from fpdf import FPDF
+import io
 
 # Importar el canvas para firmas (Requiere streamlit-drawable-canvas en requirements.txt)
 try:
@@ -251,7 +252,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado):
             pdf.set_fill_color(220, 230, 241)
         else:
             pdf.cell(25, h_row, val_esp, 1, 0, 'C')
-            pdf.set_font('Arial', '', 6)
+            pdf.set_font('Arial', '', 6.5)
             pdf.cell(42, h_row, accion, 1, 1, 'C')
 
     pdf.ln(1)
@@ -265,7 +266,9 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado):
         ("10", "¿Se encuentra el transporte libre de plagas?", "SI", "Rechazar lote y emitir reclamo"),
         ("11", "¿El techo, paredes o lona se encuentran íntegras?", "SI", "Rechazar lote y emitir reclamo"),
         ("12", "¿El techo, paredes o lona se encuentran limpios?", "SI", "Rechazar lote y emitir reclamo"),
-        ("13", "¿El piso del transporte está limpio y en buenas condiciones?", "SI", "Emitir reclamo")
+        ("13", "¿El piso del transporte está limpio y en buenas condiciones?", "SI", "Emitir reclamo"),
+        ("14", "¿El transporte cumple con la temperatura especificada en la matriz?", "SI", "Rechazar lote y emitir reclamo"),
+        ("15", "¿El transporte se encuentra libre de olores extraños?", "SI", "Rechazar lote y emitir reclamo")
     ]
 
     for num, preg, val_esp, accion in preguntas_trans:
@@ -278,48 +281,24 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado):
         
         dibujar_casilla(pdf, 150, y_curr+(h_row-4)/2, "SI", checked=True)
         dibujar_casilla(pdf, 170, y_curr+(h_row-4)/2, "NO")
+        if num == "14":
+             dibujar_casilla(pdf, 190, y_curr+(h_row-4)/2, "N/A", checked=(str(row.get('Temperatura', ''))=="N/A"))
 
         pdf.set_font('Arial', 'B', 7)
         pdf.cell(25, h_row, val_esp, 1, 0, 'C')
-        pdf.set_font('Arial', '', 6)
+        pdf.set_font('Arial', '', 6.5)
         pdf.cell(42, h_row, accion, 1, 1, 'C')
         
-    # --- TEMPERATURA ---
-    temp_val = str(row.get('Temperatura', 'N/A'))
-    y_curr = pdf.get_y()
-    pdf.set_font('Arial', 'B', 7)
-    pdf.cell(6, h_row, '14', 1, 0, 'C')
-    pdf.set_font('Arial', '', 6.5)
-    pdf.cell(134, h_row, '¿El transporte cumple con la temperatura especificada?', 1, 0, 'L')
-    pdf.cell(70, h_row, '', 1, 0)
-    dibujar_casilla(pdf, 150, y_curr+(h_row-4)/2, "SI", checked=(temp_val != "N/A"))
-    dibujar_casilla(pdf, 170, y_curr+(h_row-4)/2, "NO")
-    dibujar_casilla(pdf, 190, y_curr+(h_row-4)/2, "N/A", checked=(temp_val == "N/A"))
-    pdf.set_font('Arial', 'B', 7)
-    pdf.cell(25, h_row, "SI", 1, 0, 'C')
-    pdf.set_font('Arial', '', 6)
-    pdf.cell(42, h_row, "Rechazar lote", 1, 1, 'C')
-
-    pdf.cell(6, h_row, '', 'LR', 0)
-    pdf.cell(204, h_row, f"Temperatura (°C): {temp_val}", 'LR', 0, 'L')
-    pdf.cell(67, h_row, '', 'LR', 1)
-
-    y_curr = pdf.get_y()
-    pdf.set_font('Arial', 'B', 7)
-    pdf.cell(6, h_row, '15', 1, 0, 'C')
-    pdf.set_font('Arial', '', 6.5)
-    pdf.cell(134, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
-    pdf.cell(70, h_row, '', 1, 0)
-    dibujar_casilla(pdf, 150, y_curr+(h_row-4)/2, "SI", checked=True)
-    dibujar_casilla(pdf, 170, y_curr+(h_row-4)/2, "NO")
-    pdf.set_font('Arial', 'B', 7)
-    pdf.cell(25, h_row, "SI", 1, 0, 'C')
-    pdf.set_font('Arial', '', 6)
-    pdf.cell(42, h_row, "Rechazar lote", 1, 1, 'C')
+        # Campo de temperatura extra bajo la 14
+        if num == "14":
+            temp_val = str(row.get('Temperatura', 'N/A'))
+            pdf.cell(6, h_row, '', 'LR', 0)
+            pdf.cell(204, h_row, f"Temperatura (°C): {temp_val}", 'LR', 0, 'L')
+            pdf.cell(67, h_row, '', 'LR', 1)
 
     pdf.ln(2)
     
-    # --- RESULTADO E IMÁGENES DE FIRMA ---
+    # --- RESULTADO, OBSERVACIONES Y FIRMAS ---
     y_curr = pdf.get_y()
     pdf.rect(10, y_curr, 277, 8)
     pdf.set_xy(10, y_curr+2)
@@ -338,16 +317,16 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    pdf.ln(12) # Espacio para firmas
+    pdf.ln(12) 
     y_firmas = pdf.get_y()
     
-    # Inserción de imágenes de firma
+    # Inserción SEGURA de imágenes de firma
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
-    if os.path.exists(ruta_firma_op):
+    if ruta_firma_op and os.path.exists(ruta_firma_op):
         pdf.image(ruta_firma_op, x=65, y=y_firmas-10, w=30, h=12)
         
     ruta_firma_sup = str(row.get('RutaFirmaSup', ''))
-    if os.path.exists(ruta_firma_sup):
+    if ruta_firma_sup and os.path.exists(ruta_firma_sup):
         pdf.image(ruta_firma_sup, x=195, y=y_firmas-10, w=30, h=12)
 
     pdf.set_font('Arial', 'B', 8)
@@ -498,6 +477,15 @@ with tab1:
       df_carrito = pd.DataFrame(st.session_state.items_ingreso_actual)
       st.dataframe(df_carrito[["Planta", "NombreMaterial", "FacturaGuia", "Lote", "Cantidad"]], use_container_width=True)
 
+      item_a_borrar = st.selectbox(
+          "Quitar producto de la lista actual:",
+          options=range(len(st.session_state.items_ingreso_actual)),
+          format_func=lambda x: f"{st.session_state.items_ingreso_actual[x]['NombreMaterial']} (Lote: {st.session_state.items_ingreso_actual[x]['Lote']})"
+      )
+      if st.button("❌ Quitar seleccionado"):
+        st.session_state.items_ingreso_actual.pop(item_a_borrar)
+        st.rerun()
+
       st.markdown("---")
       st.subheader("3. Finalizar y Enviar a Revisión")
       responsable = st.text_input("Operador Responsable")
@@ -516,13 +504,17 @@ with tab1:
         if not responsable:
           st.error("⚠️ Ingresa el nombre del operador responsable.")
         else:
-          # Guardar firma operador
+          # Guardado blindado de la firma con try-except
           ruta_firma_op = ""
-          if canvas_op and canvas_op.image_data is not None and np.any(canvas_op.image_data):
-              os.makedirs("temp_firmas", exist_ok=True)
-              ruta_firma_op = f"temp_firmas/firma_op_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
-              img = Image.fromarray(canvas_op.image_data.astype('uint8'), 'RGBA')
-              img.save(ruta_firma_op)
+          if canvas_op is not None:
+              try:
+                  if canvas_op.image_data is not None and np.any(canvas_op.image_data):
+                      os.makedirs("temp_firmas", exist_ok=True)
+                      ruta_firma_op = f"temp_firmas/firma_op_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
+                      img = Image.fromarray(canvas_op.image_data.astype('uint8'), 'RGBA')
+                      img.save(ruta_firma_op)
+              except Exception:
+                  pass # Se ignora si el entorno no logra capturar la imagen
 
           df_p = cargar_pendientes()
           nuevo_id = int(df_p["ID"].max()) + 1 if not df_p.empty and not pd.isna(df_p["ID"].max()) else 1
@@ -586,50 +578,57 @@ with tab2:
                   height=100, width=400, drawing_mode="freedraw", key=f"firma_sup_{row['ID']}"
               )
 
-          if st.button("Aprobar y Generar R-ICC-14-1", key=f"btn_apr_{row['ID']}", type="primary"):
-            if not nombre_supervisor:
-              st.error("Ingrese su nombre para firmar.")
-            else:
-              with st.spinner("Generando PDF Oficial R-ICC-14-1..."):
-                carpeta_base = "./Registros_Oficiales"
-                subcarpeta_lote = f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(" ", "_")
-                ruta_destino = os.path.join(carpeta_base, str(row["Planta"]), str(row["TipoMaterial"]), str(row["NombreMaterial"]), subcarpeta_lote)
-                os.makedirs(ruta_destino, exist_ok=True)
+          col_btn1, col_btn2 = st.columns(2)
+          with col_btn1:
+            if st.button("Aprobar y Generar R-ICC-14-1", key=f"btn_apr_{row['ID']}", type="primary"):
+              if not nombre_supervisor:
+                st.error("Ingrese su nombre para firmar.")
+              else:
+                with st.spinner("Generando PDF Oficial R-ICC-14-1..."):
+                  carpeta_base = "./Registros_Oficiales"
+                  subcarpeta_lote = f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(" ", "_")
+                  ruta_destino = os.path.join(carpeta_base, str(row["Planta"]), str(row["TipoMaterial"]), str(row["NombreMaterial"]), subcarpeta_lote)
+                  os.makedirs(ruta_destino, exist_ok=True)
 
-                # Guardar Firma Supervisor
-                ruta_firma_sup = ""
-                if canvas_sup and canvas_sup.image_data is not None and np.any(canvas_sup.image_data):
-                    os.makedirs("temp_firmas", exist_ok=True)
-                    ruta_firma_sup = f"temp_firmas/firma_sup_{row['ID']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
-                    img = Image.fromarray(canvas_sup.image_data.astype('uint8'), 'RGBA')
-                    img.save(ruta_firma_sup)
-                
-                row['RutaFirmaSup'] = ruta_firma_sup
+                  # Guardado blindado de la Firma Supervisor
+                  ruta_firma_sup = ""
+                  if canvas_sup is not None:
+                      try:
+                          if canvas_sup.image_data is not None and np.any(canvas_sup.image_data):
+                              os.makedirs("temp_firmas", exist_ok=True)
+                              ruta_firma_sup = f"temp_firmas/firma_sup_{row['ID']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
+                              img = Image.fromarray(canvas_sup.image_data.astype('uint8'), 'RGBA')
+                              img.save(ruta_firma_sup)
+                      except Exception:
+                          pass
+                  
+                  row['RutaFirmaSup'] = ruta_firma_sup
 
-                # Guardar certificado
-                ext_cert = os.path.splitext(str(row["RutaPdfCert"]))[1] if row["RutaPdfCert"] else ".pdf"
-                ruta_cert_final = os.path.join(ruta_destino, f"Certificado_Original_{row['LoteProveedor']}{ext_cert}")
-                if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
-                  shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
+                  # Guardar certificado
+                  ext_cert = os.path.splitext(str(row["RutaPdfCert"]))[1] if row["RutaPdfCert"] else ".pdf"
+                  ruta_cert_final = os.path.join(ruta_destino, f"Certificado_Original_{row['LoteProveedor']}{ext_cert}")
+                  if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
+                    shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
 
-                # Generar PDF
-                ruta_checklist_final = os.path.join(ruta_destino, f"Checklist_RICC14-1_{row['LoteProveedor']}.pdf")
-                generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_final)
+                  # Generar PDF
+                  ruta_checklist_final = os.path.join(ruta_destino, f"Checklist_RICC14-1_{row['LoteProveedor']}.pdf")
+                  generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_final)
 
-                df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
-                df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(nombre_supervisor)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaChecklistOficial"] = str(ruta_checklist_final)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(ruta_cert_final)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaFirmaSup"] = str(ruta_firma_sup)
-                guardar_pendientes(df_p)
+                  df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
+                  df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(nombre_supervisor)
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaChecklistOficial"] = str(ruta_checklist_final)
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(ruta_cert_final)
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaFirmaSup"] = str(ruta_firma_sup)
+                  guardar_pendientes(df_p)
 
-                st.success("🎉 ¡Checklist PDF R-ICC-14-1 Generado y Aprobado!")
-                st.rerun()
+                  st.success("🎉 ¡Checklist PDF R-ICC-14-1 Generado y Aprobado!")
+                  st.rerun()
 
-          if st.button("🗑️ Eliminar Registro", key=f"del_pend_{row['ID']}"):
-            df_p = df_p[df_p["ID"] != row["ID"]]
-            guardar_pendientes(df_p)
-            st.rerun()
+          with col_btn2:
+            if st.button("🗑️ Eliminar Registro", key=f"del_pend_{row['ID']}"):
+              df_p = df_p[df_p["ID"] != row["ID"]]
+              guardar_pendientes(df_p)
+              st.rerun()
 
 # ------------------------------------------
 # PESTAÑA 3: BÚSQUEDA Y TRAZABILIDAD
@@ -652,7 +651,7 @@ with tab3:
     else:
       resultado = aprobados
 
-    st.dataframe(resultado[["NombreMaterial", "FacturaGuia", "LoteProveedor", "Fecha", "FirmaCalidad"]], use_container_width=True)
+    st.dataframe(resultado[["Planta", "NombreMaterial", "FacturaGuia", "LoteProveedor", "Fecha", "FirmaCalidad"]], use_container_width=True)
 
     for idx, row in resultado.iterrows():
       with st.expander(f"📁 {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Supervisor: {row['FirmaCalidad']}"):
@@ -686,7 +685,6 @@ with tab4:
   if len(aprobados_excel) == 0:
     st.info("No hay información suficiente.")
   else:
-    import io
     columnas_reporte = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor", "LoteProveedor", 
         "FacturaGuia", "Placa", "IngresoSAP", "DocSAP", "EstadoMarchamo", "Marchamo",
