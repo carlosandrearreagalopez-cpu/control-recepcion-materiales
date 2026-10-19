@@ -590,8 +590,12 @@ with tab1:
     df_material = df_prov[df_prov[col_material] == material_sel]
     criticidad_val = str(df_material.iloc[0][col_criticidad]) if col_criticidad and not df_material.empty else "N/A"
 
+    # Verificación estricta: Si es envase, etiqueta, botella, tapa o material de empaque, NO requiere temperatura aunque tenga palabras como pulpa
+    palabras_clave_empaque = ["envase", "etiqueta", "tapa", "botella", "caja", "bolsa", "film", "saco", "precinto", "carton"]
+    es_empaque = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_empaque)
+
     palabras_clave_temp = ["pulpa", "concentrado", "leche", "refrigerado", "congelado", "fresco", "crema", "mantequilla", "queso", "carne", "pollo", "embutido"]
-    requiere_temperatura = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_temp)
+    requiere_temperatura = False if es_empaque else any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_temp)
 
     with st.form("form_item_recepcion"):
       st.subheader("Datos de Transporte, SAP y Lote")
