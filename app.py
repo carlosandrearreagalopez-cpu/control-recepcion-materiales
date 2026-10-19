@@ -5,7 +5,7 @@ import openpyxl
 import pandas as pd
 import streamlit as st
 
-# Configuración de diseño de página limpio y profesional
+# Configuración de diseño de página
 st.set_page_config(
     page_title="Control de Recepción y Calidad",
     page_icon="📦",
@@ -13,7 +13,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Estilos visuales modernos
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -52,6 +51,12 @@ def cargar_pendientes():
         "NombreMaterial",
         "Proveedor",
         "LoteProveedor",
+        "Cantidad",
+        "Unidad",
+        "Temperatura",
+        "FechaProduccion",
+        "FechaVencimiento",
+        "Criticidad",
         "Responsable",
         "Fecha",
         "Estado",
@@ -64,7 +69,7 @@ def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
 
-# CARGAR CATÁLOGO Y NORMALIZAR COLUMNAS
+# Cargar catálogo maestro
 df_db = None
 if os.path.exists(ARCHIVO_CATALOGO):
   try:
@@ -73,7 +78,6 @@ if os.path.exists(ARCHIVO_CATALOGO):
   except Exception as e:
     st.error(f"Error al leer el catálogo automático: {e}")
 
-# Opción en barra lateral para actualizar manualmente
 st.sidebar.header("⚙️ Panel de Administración")
 archivo_catalogo_nuevo = st.sidebar.file_uploader(
     "Actualizar Catálogo Excel", type=["xlsx"]
@@ -83,7 +87,6 @@ if archivo_catalogo_nuevo is not None:
   df_db.columns = df_db.columns.str.strip()
   st.sidebar.success("¡Catálogo actualizado correctamente!")
 
-# PESTAÑAS PRINCIPALES
 tab1, tab2, tab3 = st.tabs([
     "📝 1. Ingreso de Operador",
     "✍️ 2. Panel de Calidad y Firma",
@@ -101,65 +104,105 @@ with tab1:
   )
 
   if df_db is not None:
-    # Nombres exactos de tus columnas en el Excel
     col_planta = "Planta"
     col_tipo = "Tipo de material"
     col_material = "Material"
     col_proveedor = "Proveedor"
+    col_criticidad = (
+        "Criticidad" if "Criticidad" in df_db.columns else None
+    )
 
     with st.form("form_operador", clear_on_submit=False):
-      st.subheader("1. Selección de Material")
+      st.subheader("1. Jerarquía y Selección de Material")
+
+      # Nivel 1: Selección de Planta
+      plantas = df_db[col_planta].dropna().unique()
+      planta_sel = st.selectbox("Planta", plantas)
+
+      # Filtrar estrictamente por la Planta seleccionada
+      df_planta = df_db[df_db[col_planta] == planta_sel]
+
       col1, col2 = st.columns(2)
 
       with col1:
-        plantas = df_db[col_planta].dropna().unique()
-        planta_sel = st.selectbox("Planta", plantas)
-
-        tipos_material = (
-            df_db[df_db[col_planta] == planta_sel][col_tipo].dropna().unique()
-        )
+        # Nivel 2: Tipo de Material exclusivo de la planta seleccionada
+        tipos_material = df_planta[col_tipo].dropna().unique()
         tipo_mat_sel = st.selectbox("Tipo de Material", tipos_material)
 
+        # Filtrar por Planta y Tipo de Material
+        df_tipo = df_planta[df_planta[col_tipo] == tipo_mat_sel]
+
       with col2:
-        materiales = (
-            df_db[
-                (df_db[col_planta] == planta_sel)
-                & (df_db[col_tipo] == tipo_mat_sel)
-            ][col_material]
-            .dropna()
-            .unique()
-        )
+        # Nivel 3: Nombre del Material exclusivo de la planta y tipo seleccionados
+        materiales = df_tipo[col_material].dropna().unique()
         material_sel = st.selectbox("Nombre del Material", materiales)
 
-        proveedores_disponibles = (
-            df_db[
-                (df_db[col_planta] == planta_sel)
-                & (df_db[col_tipo] == tipo_mat_sel)
-                & (df_db[col_material] == material_sel)
-            ][col_proveedor]
-            .dropna()
-            .unique()
-        )
+        # Filtrar por Planta, Tipo y Material seleccionado para obtener sus proveedores
+        df_material = df_tipo[df_tipo[col_material] == material_sel]
+        proveedores_disponibles = df_material[col_proveedor].dropna().unique()
         proveedor_sel = st.selectbox("Proveedor", proveedores_disponibles)
 
+      # Obtener criticidad automática del material seleccionado
+      criticidad_val = "N/A"
+      if col_criticidad and not df_material.empty:
+        criticidad_val = str(df_material.iloc[0][col_criticidad])
+
+      st.info(f"🏷️ **Criticidad Asociada al Material:** {criticidad_val}")
+
       st.markdown("---")
-      st.subheader("2. Datos de Lote y Responsable")
-      col3, col4 = st.columns(2)
+      st.subheader("2. Datos de Lote, Cantidad y Fechas")
+      col3, col4, col5 = st.columns(3)
       with col3:
         lote_proveedor = st.text_input(
             "Lote del Proveedor", placeholder="Ej. LOTE-98765"
         )
       with col4:
-        responsable = st.text_input(
-            "Operador Responsable", placeholder="Tu Nombre"
+        cantidad = st.number_input(
+            "Cantidad Recibida", min_value=0.0, format="%.2f"
+        )
+      with col5:
+        unidad = st.selectbox(
+            "Unidad de Medida",
+            ["Kg", "Litros", "Unidades", "Toneladas", "Galones", "Cajas"],
+        )
+
+      col6, col7 = st.columns(2)
+      with col6:
+        fecha_produccion = st.date_input("Fecha de Producción")
+      with col7:
+        fecha_vencimiento = st.date_input("Fecha de Vencimiento / Caducidad")
+
+      # Control de Temperatura condicional si es materia prima, concentrado o pulpa
+      temperatura = "N/A"
+      if (
+          "materia prima" in str(tipo_mat_sel).lower()
+          or "concentrado" in str(material_sel).lower()
+          or "pulpa" in str(material_sel).lower()
+      ):
+        st.markdown("---")
+        st.subheader("❄️ Control de Temperatura (Requerido para Materia Prima)")
+        temperatura = st.number_input(
+            "Temperatura de Recepción (°C)",
+            value=4.0,
+            format="%.1f",
+            help=(
+                "Ingrese la temperatura medida al recibir el concentrado o"
+                " pulpa."
+            ),
         )
 
       st.markdown("---")
-      st.subheader("3. Documentación")
-      certificado_file = st.file_uploader(
-          "Adjuntar Certificado de Calidad (Imagen o PDF)",
-          type=["jpg", "jpeg", "png", "pdf"],
-      )
+      st.subheader("3. Responsable y Documentación")
+      col8, col9 = st.columns(2)
+      with col8:
+        responsable = st.text_input(
+            "Operador Responsable", placeholder="Tu Nombre"
+        )
+      with col9:
+        certificado_file = st.file_uploader(
+            "Adjuntar Certificado de Calidad (Imagen o PDF)",
+            type=["jpg", "jpeg", "png", "pdf"],
+        )
 
       st.markdown("")
       enviar_revision = st.form_submit_button(
@@ -194,6 +237,12 @@ with tab1:
             "NombreMaterial": material_sel,
             "Proveedor": proveedor_sel,
             "LoteProveedor": lote_proveedor,
+            "Cantidad": cantidad,
+            "Unidad": unidad,
+            "Temperatura": temperatura,
+            "FechaProduccion": str(fecha_produccion),
+            "FechaVencimiento": str(fecha_vencimiento),
+            "Criticidad": criticidad_val,
             "Responsable": responsable,
             "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "Estado": "Pendiente",
@@ -223,8 +272,7 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña de acceso,"
-      " revise el certificado, firme y apruebe para generar la jerarquía"
-      " oficial de carpetas."
+      " revise los datos, certificado, firme y apruebe."
   )
 
   clave_ingresada = st.text_input(
@@ -252,9 +300,16 @@ with tab2:
             st.write(f"**Planta:** {row['Planta']}")
             st.write(f"**Tipo de Material:** {row['TipoMaterial']}")
             st.write(f"**Proveedor:** {row['Proveedor']}")
+            st.write(f"**Criticidad:** {row['Criticidad']}")
+            st.write(f"**Cantidad:** {row['Cantidad']} {row['Unidad']}")
           with c2:
+            st.write(
+                f"**Prod. / Venc.:** {row['FechaProduccion']} al"
+                f" {row['FechaVencimiento']}"
+            )
+            st.write(f"**Temperatura:** {row['Temperatura']} °C")
             st.write(f"**Operador:** {row['Responsable']}")
-            st.write(f"**Fecha:** {row['Fecha']}")
+            st.write(f"**Fecha Ingreso:** {row['Fecha']}")
 
           if os.path.exists(str(row["RutaCarpeta"])):
             if row["RutaCarpeta"].endswith((".jpg", ".jpeg", ".png")):
@@ -416,6 +471,11 @@ with tab3:
             "NombreMaterial",
             "Proveedor",
             "LoteProveedor",
+            "Cantidad",
+            "Unidad",
+            "FechaProduccion",
+            "FechaVencimiento",
+            "Criticidad",
             "Fecha",
             "FirmaCalidad",
         ]],
