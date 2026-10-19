@@ -639,10 +639,10 @@ with tab1:
         st.subheader("❄️ Control de Temperaturas (Requerido por tipo de material)")
         tmp1, tmp2 = st.columns(2)
         with tmp1:
-            # min_value establecido en -50.0 para permitir temperaturas bajo cero (frío / congelado)
-            temp_trans = st.number_input("Temp. Transporte (°C)", value=4.0, min_value=-50.0, max_value=100.0, format="%.1f")
+            # Cuadro de texto para permitir temperaturas negativas (ej. -4.0, -18, etc.) o cualquier valor
+            temp_trans = st.text_input("Temp. Transporte (°C)", value="4.0", placeholder="Ej. 4.0 o -18.5")
         with tmp2:
-            temp_mat = st.number_input("Temp. del Material (°C)", value=4.0, min_value=-50.0, max_value=100.0, format="%.1f")
+            temp_mat = st.text_input("Temp. del Material (°C)", value="4.0", placeholder="Ej. 4.0 o -18.5")
       else:
         st.info("ℹ️ Este material no requiere control de temperatura (se registrará automáticamente como N/A).")
 
@@ -669,7 +669,7 @@ with tab1:
             "Placa": placa_transporte, "IngresoSAP": str(ingreso_sap), "DocSAP": doc_sap,
             "EstadoMarchamo": estado_marchamo, "Marchamo": marchamo, "EstadoCandado": estado_candado,
             "Lote": lote_proveedor, "Cantidad": cantidad, "Unidad": unidad, 
-            "TempTransporte": temp_trans, "TempMaterial": temp_mat,
+            "TempTransporte": str(temp_trans), "TempMaterial": str(temp_mat),
             "Produccion": str(fecha_produccion), "Vencimiento": str(fecha_vencimiento),
             "Criticidad": criticidad_val, "RutaTemp": ruta_cert_temp,
             "NombreCertificado": certificado_file.name
@@ -704,15 +704,14 @@ with tab1:
               nueva_factura = st.text_input("No. de Factura/Guía", value=item_actual['FacturaGuia'])
               nueva_cantidad = st.number_input("Cantidad Recibida", min_value=0.0, value=float(item_actual['Cantidad']), format="%.2f")
               
-              # Si requiere temperatura, permitir editarla también
               temp_trans_edit = item_actual['TempTransporte']
               temp_mat_edit = item_actual['TempMaterial']
               if temp_trans_edit != "N/A":
                   e_t1, e_t2 = st.columns(2)
                   with e_t1:
-                      temp_trans_edit = st.number_input("Temp. Transporte (°C)", value=float(temp_trans_edit), min_value=-50.0, max_value=100.0, format="%.1f")
+                      temp_trans_edit = st.text_input("Temp. Transporte (°C)", value=str(temp_trans_edit))
                   with e_t2:
-                      temp_mat_edit = st.number_input("Temp. del Material (°C)", value=float(temp_mat_edit), min_value=-50.0, max_value=100.0, format="%.1f")
+                      temp_mat_edit = st.text_input("Temp. del Material (°C)", value=str(temp_mat_edit))
 
               guardar_cambios = st.form_submit_button("💾 Guardar Cambios en este Producto")
               if guardar_cambios:
