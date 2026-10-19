@@ -814,17 +814,24 @@ with tab2:
             else:
               with st.spinner("Generando y unificando el PDF de Auditoría..."):
                 carpeta_base = "./Registros_Oficiales"
-                subcarpeta_lote = f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(" ", "_")
-                ruta_destino = os.path.join(carpeta_base, str(row["Planta"]), str(row["TipoMaterial"]), str(row["NombreMaterial"]), subcarpeta_lote)
+                
+                # --- SANITIZACIÓN DE CARACTERES PARA EVITAR FileNotFoundError ---
+                planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace("\\", "_")
+                tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace("\\", "_")
+                nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace("\\", "_")
+                lote_safe = str(row.get("LoteProveedor", "Lote")).replace("/", "_").replace("\\", "_")
+                
+                subcarpeta_lote = f"Lote_{lote_safe}_{nombre_mat_safe}"
+                ruta_destino = os.path.join(carpeta_base, planta_safe, tipo_mat_safe, nombre_mat_safe, subcarpeta_lote)
                 os.makedirs(ruta_destino, exist_ok=True)
+                # ---------------------------------------------------------------
 
                 ruta_firma_sup = guardar_firma(canvas_sup, f"firma_sup_{row['ID']}")
                 row['RutaFirmaSup'] = ruta_firma_sup
 
-                # --- PROTECCIÓN ROBUSTA CONTRA FileNotFoundError ---
                 ruta_cert_origen = str(row.get("RutaPdfCert", ""))
                 ext_cert = os.path.splitext(ruta_cert_origen)[1] if ruta_cert_origen and ruta_cert_origen != "nan" else ".pdf"
-                ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{row['LoteProveedor']}{ext_cert}")
+                ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{lote_safe}{ext_cert}")
                 
                 try:
                     if ruta_cert_origen and ruta_cert_origen != "nan" and os.path.exists(ruta_cert_origen):
@@ -833,12 +840,11 @@ with tab2:
                         ruta_cert_final = ""
                 except Exception:
                     ruta_cert_final = ""
-                # --------------------------------------------------
 
-                ruta_checklist_temp = os.path.join(ruta_destino, f"TEMP_Checklist_{row['LoteProveedor']}.pdf")
+                ruta_checklist_temp = os.path.join(ruta_destino, f"TEMP_Checklist_{lote_safe}.pdf")
                 generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_temp)
 
-                ruta_unificada = os.path.join(ruta_destino, f"Registro_Auditoria_{row['LoteProveedor']}.pdf")
+                ruta_unificada = os.path.join(ruta_destino, f"Registro_Auditoria_{lote_safe}.pdf")
                 if ruta_cert_final and os.path.exists(ruta_cert_final):
                     generar_documento_unificado(ruta_checklist_temp, ruta_cert_final, ruta_unificada)
                 else:
