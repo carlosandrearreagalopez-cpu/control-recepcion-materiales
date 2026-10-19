@@ -212,7 +212,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo (Pregunta 1) - Ajustado x = 50 para que N/A quede dentro del cuadro (100mm ancho)
+    # Marchamo (Pregunta 1) - x = 50 para que N/A quede dentro del cuadro (100mm ancho)
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
     pdf.cell(40, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
@@ -400,42 +400,54 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS IDÉNTICO A TUS FOTOS 2 y 3 ---
-    pdf.ln(18) 
-    y_linea = pdf.get_y()
+    # --- ESPACIO DE FIRMAS IDÉNTICO A LAS FOTOS 2 Y 3 ---
+    pdf.ln(12) 
+    y_linea1 = pdf.get_y()
 
-    # 1. Dibujar las dos líneas base de firma
-    pdf.line(50, y_linea, 130, y_linea)   # Línea Operador
-    pdf.line(170, y_linea, 250, y_linea)  # Línea Supervisor
+    # 1. Primera línea (Línea para el nombre)
+    pdf.line(55, y_linea1, 135, y_linea1)   # Línea Nombre Operador
+    pdf.line(175, y_linea1, 255, y_linea1)  # Línea Nombre Supervisor
 
-    # 2. Insertar Imágenes de las firmas exactamente encima de la línea
+    # Nombres impresos justo ARRIBA de la primera línea
+    pdf.set_xy(55, y_linea1 - 4)
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
+    
+    pdf.set_xy(175, y_linea1 - 4)
+    pdf.cell(80, 4, supervisor, 0, 0, 'C')
+
+    # Etiquetas a la izquierda de la primera línea
+    pdf.set_xy(10, y_linea1 - 1)
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(44, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
+    
+    pdf.set_xy(145, y_linea1 - 1)
+    pdf.cell(28, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
+
+    # 2. Segunda línea (Línea para la Firma)
+    y_linea2 = y_linea1 + 10
+    pdf.line(55, y_linea2, 135, y_linea2)   # Línea Firma Operador
+    pdf.line(175, y_linea2, 255, y_linea2)  # Línea Firma Supervisor
+
+    # Etiquetas "Firma:" a la izquierda de la segunda línea
+    pdf.set_xy(35, y_linea2 - 1)
+    pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
+    
+    pdf.set_xy(155, y_linea2 - 1)
+    pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
+
+    # Insertar Imágenes de las firmas exactamente encima de la segunda línea
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
-            pdf.image(ruta_firma_op, x=65, y=y_linea - 14, w=50, h=13)
+            pdf.image(ruta_firma_op, x=70, y=y_linea2 - 12, w=50, h=11)
         except Exception: pass
         
     ruta_firma_sup = str(row.get('RutaFirmaSup', ''))
     if ruta_firma_sup and os.path.exists(ruta_firma_sup):
         try:
-            pdf.image(ruta_firma_sup, x=185, y=y_linea - 14, w=50, h=13)
+            pdf.image(ruta_firma_sup, x=190, y=y_linea2 - 12, w=50, h=11)
         except Exception: pass
-
-    # 3. Nombre del responsable y del supervisor impresos JUSTO ARRIBA de la línea
-    pdf.set_xy(50, y_linea - 4)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
-    
-    pdf.set_xy(170, y_linea - 4)
-    pdf.cell(80, 4, supervisor, 0, 0, 'C')
-
-    # 4. Textos descriptivos ("Nombre de la persona..." y "Vo. Bo. Calidad:") exactamente debajo y alineados a la par
-    pdf.set_xy(10, y_linea + 1)
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(115, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
-    
-    pdf.set_xy(135, y_linea + 1)
-    pdf.cell(32, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
 
     pdf.output(ruta_guardado_temp)
 
