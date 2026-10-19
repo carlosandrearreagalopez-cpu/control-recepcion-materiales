@@ -80,7 +80,7 @@ st.markdown("---")
 # ------------------------------------------
 def enviar_notificacion_outlook(asunto, cuerpo_mensaje):
     remitente = CORREO_NOTIFICACION
-    password = "tu_contraseña_o_app_password"  # Reemplaza con tu contraseña o App Password de Outlook
+    password = "tu_contraseña_o_app_password"
     destinatario = CORREO_NOTIFICACION
     
     try:
@@ -117,7 +117,6 @@ def cargar_pendientes():
       else:
         df[col] = df[col].astype(str)
     
-    # Ordenar por fecha de ingreso (más reciente primero)
     if "Fecha" in df.columns and not df.empty:
       df = df.sort_values(by="Fecha", ascending=False).reset_index(drop=True)
       
@@ -180,7 +179,7 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
         shutil.copy(ruta_checklist, ruta_final)
 
 # ------------------------------------------
-# MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
+# MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO CORREGIDO)
 # ------------------------------------------
 def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
     curr_x = x_start
@@ -275,7 +274,8 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(67, h_row, 'Número de documento SAP:', 1, 0, 'R')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(100, h_row, str(row.get('DocSAP', '')), 1, 1, 'C')
+    val_docsap = str(row.get('DocSAP', ''))
+    pdf.cell(100, h_row, val_docsap if val_docsap != 'nan' else '', 1, 1, 'C')
     pdf.ln(2)
 
     # --- MARCHAMO Y CANDADO ---
@@ -292,26 +292,27 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo
+    # Marchamo (Pregunta 1) - Espacio ajustado para evitar solapamiento
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
-    pdf.cell(42, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
+    pdf.cell(50, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
     
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
-    dibujar_opciones_cabecera(pdf, 54, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
+    dibujar_opciones_cabecera(pdf, 62, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
 
     pdf.set_xy(15, y_start + h_row)
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
-    pdf.cell(55, h_row, str(row.get('Marchamo', '')), 'B', 0, 'C')
+    val_marchamo = str(row.get('Marchamo', ''))
+    pdf.cell(55, h_row, val_marchamo if val_marchamo != 'nan' else '', 'B', 0, 'C')
 
-    # Candado
+    # Candado (Pregunta 2) - Espacio ajustado para evitar solapamiento
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
-    pdf.cell(42, h_row, '¿El candado se encuentra alterado?', 0, 0)
+    pdf.cell(50, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
     idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
-    dibujar_opciones_cabecera(pdf, 155, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
+    dibujar_opciones_cabecera(pdf, 167, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
 
     pdf.set_xy(200, y_start + h_row/2)
     pdf.set_font('Arial', 'B', 7)
@@ -416,7 +417,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.set_font('Arial', '', 7)
         pdf.cell(57, h_row, accion, 1, 1, 'C')
         
-    # --- TEMPERATURAS ---
+    # --- TEMPERATURAS (VERIFICA SI APLICA O MARCA N/A) ---
     temp_trans = str(row.get('TempTransporte', 'N/A'))
     temp_mat = str(row.get('TempMaterial', 'N/A'))
     
@@ -428,7 +429,8 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(130, h_row, '¿El transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
     pdf.cell(55, h_row, '', 'LTR', 0)
     
-    idx_temp = 2 if (temp_trans == "N/A" and temp_mat == "N/A") else 0
+    # Si temperatura es N/A, marca índice 2 (N/A), de lo contrario 0 (SI)
+    idx_temp = 2 if (temp_trans == "N/A" or temp_trans == "nan" or not temp_trans) else 0
     dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
     
     pdf.set_xy(200, y_curr)
@@ -441,7 +443,10 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(10, y_curr)
     pdf.cell(5, h_row, '', 'LBR', 0)
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(130, h_row, f"Temperatura Transporte (°C): {temp_trans}         Temperatura del Material (°C): {temp_mat}", 'BR', 0, 'C')
+    txt_temps = f"Temperatura Transporte (°C): {temp_trans if temp_trans!='nan' else 'N/A'}         Temperatura del Material (°C): {temp_mat if temp_mat!='nan' else 'N/A'}"
+    if idx_temp == 2:
+        txt_temps = "Temperatura Transporte (°C): N/A         Temperatura del Material (°C): N/A"
+    pdf.cell(130, h_row, txt_temps, 'BR', 0, 'C')
     pdf.cell(55, h_row, '', 'BR', 0)
     pdf.cell(30, h_row, '', 'BR', 0)
     pdf.cell(57, h_row, '', 'BR', 1)
@@ -585,7 +590,9 @@ with tab1:
     df_material = df_prov[df_prov[col_material] == material_sel]
     criticidad_val = str(df_material.iloc[0][col_criticidad]) if col_criticidad and not df_material.empty else "N/A"
 
-    requiere_temperatura = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in ["pulpa", "concentrado", "leche", "refrigerado", "congelado"])
+    # Palabras clave estrictas para habilitar temperatura (frescos, lácteos, pulpas, congelados, refrigerados, carne, etc.)
+    palabras_clave_temp = ["pulpa", "concentrado", "leche", "refrigerado", "congelado", "fresco", "crema", "mantequilla", "queso", "carne", "pollo", "embutido"]
+    requiere_temperatura = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_temp)
 
     with st.form("form_item_recepcion"):
       st.subheader("Datos de Transporte, SAP y Lote")
@@ -627,12 +634,14 @@ with tab1:
       temp_mat = "N/A"
       if requiere_temperatura:
         st.markdown("---")
-        st.subheader("❄️ Control de Temperaturas (Requerido)")
+        st.subheader("❄️ Control de Temperaturas (Requerido por tipo de material)")
         tmp1, tmp2 = st.columns(2)
         with tmp1:
             temp_trans = st.number_input("Temp. Transporte (°C)", value=4.0, format="%.1f")
         with tmp2:
             temp_mat = st.number_input("Temp. del Material (°C)", value=4.0, format="%.1f")
+      else:
+        st.info("ℹ️ Este material no requiere control de temperatura (se registrará automáticamente como N/A).")
 
       st.markdown("---")
       certificado_file = st.file_uploader("Subir Archivo del Certificado (PDF Recomendado)", type=["jpg", "jpeg", "png", "pdf"])
@@ -646,7 +655,6 @@ with tab1:
         st.warning("⚠️ Es obligatorio adjuntar el archivo del certificado.")
       else:
         os.makedirs("temp_certificados", exist_ok=True)
-        # Nombre único con marca de tiempo para evitar sobreescritura
         nombre_archivo_unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{certificado_file.name}"
         ruta_cert_temp = os.path.join("temp_certificados", nombre_archivo_unico)
         with open(ruta_cert_temp, "wb") as f:
@@ -670,7 +678,6 @@ with tab1:
       st.markdown("---")
       st.subheader("📋 Resumen de Productos Agregados")
       
-      # Mini apartado detallado por producto con indicador de certificado cargado
       for idx, item in enumerate(st.session_state.items_ingreso_actual):
           st.markdown(f"""
           <div style='background-color: #eef2f7; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #0066cc;'>
@@ -868,7 +875,7 @@ with tab4:
   aprobados_excel = df_p[df_p["Estado"] == "Aprobado"].copy() if not df_p.empty else pd.DataFrame()
 
   if len(aprobados_excel) == 0:
-    st.info("No hay información suficiente.")
+    st.info("No information available.")
   else:
     columnas_reporte = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor", "LoteProveedor", 
