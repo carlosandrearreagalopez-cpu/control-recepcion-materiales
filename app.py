@@ -132,7 +132,7 @@ def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
             pdf.cell(3, 3, 'X', 0, 0, 'C')
-        curr_x += 16
+        curr_x += 15
 
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
     """Función centrada y uniforme para las preguntas principales de la tabla."""
@@ -230,7 +230,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo (Pregunta 1) - Posición exacta dentro del cuadro de 100mm
+    # Marchamo (Pregunta 1)
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
     pdf.cell(42, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
@@ -243,13 +243,13 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
     pdf.cell(55, h_row, str(row.get('Marchamo', '')), 'B', 0, 'C')
 
-    # Candado (Pregunta 2) - Posición exacta dentro del cuadro de 85mm
+    # Candado (Pregunta 2) - Ajustado x_start a 155 para que N/A entre perfectamente
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
     pdf.cell(42, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
     idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
-    dibujar_opciones_cabecera(pdf, 159, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
+    dibujar_opciones_cabecera(pdf, 155, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
 
     pdf.set_xy(200, y_start + h_row/2)
     pdf.set_font('Arial', 'B', 7)
@@ -433,11 +433,13 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(175, y_linea1 - 4)
     pdf.cell(80, 4, supervisor, 0, 0, 'C')
 
-    pdf.set_xy(10, y_linea1 - 1)
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(44, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
+    # Ajustado: Etiqueta movida a x=5 para que no se corte y se lea completa
+    pdf.set_xy(5, y_linea1 - 1)
+    pdf.set_font('Arial', 'B', 7)
+    pdf.cell(48, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
     
     pdf.set_xy(145, y_linea1 - 1)
+    pdf.set_font('Arial', 'B', 8)
     pdf.cell(28, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
 
     # 2. Segunda línea (Línea para la Firma)
