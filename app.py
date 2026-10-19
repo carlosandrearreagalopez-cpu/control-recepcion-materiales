@@ -1,6 +1,6 @@
 from datetime import datetime
 import os
-from fpdf import FPDF
+import shutil
 import openpyxl
 import pandas as pd
 import streamlit as st
@@ -233,7 +233,8 @@ with tab1:
       st.markdown("---")
       st.subheader("📎 Certificado de Calidad del Producto")
       certificado_file = st.file_uploader(
-          "Subir Foto o PDF del Certificado", type=["jpg", "jpeg", "png", "pdf"]
+          "Subir Archivo del Certificado (PDF o Imagen)",
+          type=["jpg", "jpeg", "png", "pdf"],
       )
 
       agregar_item = st.form_submit_button(
@@ -247,7 +248,7 @@ with tab1:
         )
       elif certificado_file is None:
         st.warning(
-            "⚠️ Es obligatorio adjuntar la foto o PDF del certificado para este"
+            "⚠️ Es obligatorio adjuntar el archivo del certificado para este"
             " producto."
         )
       else:
@@ -298,7 +299,17 @@ with tab1:
           use_container_width=True,
       )
 
-      if st.button("🗑️ Limpiar lista actual"):
+      # Opción para eliminar un ítem específico del carrito actual
+      item_a_borrar = st.selectbox(
+          "Seleccione un producto para quitar de la lista actual",
+          options=range(len(st.session_state.items_ingreso_actual)),
+          format_func=lambda x: f"{st.session_state.items_ingreso_actual[x]['NombreMaterial']} (Lote: {st.session_state.items_ingreso_actual[x]['Lote']})"
+      )
+      if st.button("❌ Quitar producto seleccionado"):
+        st.session_state.items_ingreso_actual.pop(item_a_borrar)
+        st.rerun()
+
+      if st.button("🗑️ Limpiar toda la lista"):
         st.session_state.items_ingreso_actual = []
         st.rerun()
 
@@ -369,8 +380,8 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
-      " datos y apruebe para rellenar exactamente el checklist oficial y"
-      " generar el certificado PDF."
+      " datos, apruebe para rellenar el checklist o elimine registros"
+      " incorrectos."
   )
 
   clave_ingresada = st.text_input(
@@ -386,10 +397,7 @@ with tab2:
     )
 
     if len(pendientes) == 0:
-      st.info(
-          "No hay registros pendientes de aprobación en este momento."
-          " (Puedes ingresar nuevos registros en la Pestaña 1)."
-      )
+      st.info("No hay registros pendientes de aprobación en este momento.")
     else:
       for index, row in pendientes.iterrows():
         with st.expander(
@@ -413,163 +421,127 @@ with tab2:
                   row["RutaPdfCert"], caption="Certificado Adjunto", width=350
               )
             else:
-              st.write("📄 Certificado adjunto disponible.")
+              st.write("📄 Certificado PDF adjunto disponible.")
 
-          with st.form(f"form_firma_{row['ID']}"):
-            nombre_supervisor = st.text_input(
-                "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
-            )
-            aprobar = st.form_submit_button(
-                "Aprobar, Generar Certificado PDF e Inyectar en Checklist 🛡️",
-                type="primary",
-            )
-
-          if aprobar:
-            if not nombre_supervisor:
-              st.error(
-                  "Debe ingresar su nombre para autorizar y firmar el registro."
+          # Botón o formulario de aprobación y opción de eliminar
+          col_btn1, col_btn2 = st.columns(2)
+          
+          with col_btn1:
+            with st.form(f"form_firma_{row['ID']}"):
+              nombre_supervisor = st.text_input(
+                  "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
               )
-            else:
-              with st.spinner(
-                  "Generando certificado oficial PDF y completando Excel..."
-              ):
-                carpeta_base = "./Registros_Oficiales"
-                subcarpeta_lote = (
-                    f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(
-                        " ", "_"
-                    )
-                )
+              aprobar = st.form_submit_button(
+                  "Aprobar y Rellenar Checklist 🛡️", type="primary"
+              )
 
-                ruta_destino = os.path.join(
-                    carpeta_base,
-                    str(row["Planta"]),
-                    str(row["TipoMaterial"]),
-                    str(row["NombreMaterial"]),
-                    subcarpeta_lote,
-                )
-                os.makedirs(ruta_destino, exist_ok=True)
+            if aprobar:
+              if not nombre_supervisor:
+                st.error("Debe ingresar su nombre para firmar.")
+              else:
+                with st.spinner("Generando documentos oficiales..."):
+                  carpeta_base = "./Registros_Oficiales"
+                  subcarpeta_lote = (
+                      f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(
+                          " ", "_"
+                      )
+                  )
 
-                # 1. GENERAR CERTIFICADO PDF OFICIAL IDÉNTICO
-                nombre_cert_oficial = (
-                    f"Certificado_Firmado_{row['LoteProveedor']}.pdf"
-                )
-                ruta_cert_final = os.path.join(
-                    ruta_destino, nombre_cert_oficial
-                )
+                  ruta_destino = os.path.join(
+                      carpeta_base,
+                      str(row["Planta"]),
+                      str(row["TipoMaterial"]),
+                      str(row["NombreMaterial"]),
+                      subcarpeta_lote,
+                  )
+                  os.makedirs(ruta_destino, exist_ok=True)
 
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", "B", 16)
-                pdf.cell(
-                    0,
-                    10,
-                    f"Certificado de Calidad - {row['NombreMaterial']}",
-                    0,
-                    1,
-                    "C",
-                )
-                pdf.set_font("Arial", "", 12)
-                pdf.cell(
-                    0,
-                    10,
-                    f"Planta: {row['Planta']} | Proveedor: {row['Proveedor']}",
-                    0,
-                    1,
-                    "C",
-                )
-                pdf.cell(
-                    0,
-                    10,
-                    f"Lote: {row['LoteProveedor']} | Factura/Guía: {row['FacturaGuia']}",
-                    0,
-                    1,
-                    "C",
-                )
-                pdf.cell(
-                    0,
-                    10,
-                    (
-                        f"Aprobado por: {nombre_supervisor} | Fecha:"
-                        f" {row['Fecha']}"
-                    ),
-                    0,
-                    1,
-                    "C",
-                )
-                pdf.ln(10)
+                  # 1. Guardar certificado original
+                  ext_cert = (
+                      os.path.splitext(str(row["RutaPdfCert"]))[1]
+                      if row["RutaPdfCert"]
+                      else ".pdf"
+                  )
+                  nombre_cert_oficial = (
+                      f"Certificado_Firmado_{row['LoteProveedor']}{ext_cert}"
+                  )
+                  ruta_cert_final = os.path.join(
+                      ruta_destino, nombre_cert_oficial
+                  )
 
-                if row["RutaPdfCert"] and os.path.exists(
-                    str(row["RutaPdfCert"])
-                ):
-                  if str(row["RutaPdfCert"]).endswith((".jpg", ".jpeg", ".png")):
-                    pdf.image(row["RutaPdfCert"], x=15, y=65, w=180)
+                  if row["RutaPdfCert"] and os.path.exists(
+                      str(row["RutaPdfCert"])
+                  ):
+                    shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
 
-                pdf.output(ruta_cert_final)
-
-                # 2. INYECTAR DATOS EN TU CHECKLIST OFICIAL DE EXCEL
-                prefijo_archivo = (
-                    f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
-                        " ", "_"
-                    )
-                )
-                
-                archivos_repo = os.listdir('.')
-                plantillas_disponibles = [
-                    f for f in archivos_repo 
-                    if f.endswith('.xlsx') and ("R ICC" in f or "Check" in f or "Checklist" in f) and f != "Maestro_Materiales_Proveedores (2).xlsx"
-                ]
-                
-                ruta_plantilla = plantillas_disponibles[0] if plantillas_disponibles else "R ICC 14-1 Check List Recepción Materiales.xlsx"
-                ruta_excel_final = os.path.join(
-                    ruta_destino, f"{prefijo_archivo}.xlsx"
-                )
-
-                if os.path.exists(ruta_plantilla):
-                  wb = openpyxl.load_workbook(ruta_plantilla)
-                  ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
+                  # 2. Rellenar Excel oficial
+                  prefijo_archivo = (
+                      f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
+                          " ", "_"
+                      )
+                  )
                   
-                  # Celdas exactas según tu formato oficial del PDF
-                  ws['C5'] = row['Fecha']                   # Fecha de recepción
-                  ws['C16'] = row['Proveedor']              # Proveedor
-                  ws['C17'] = row['NombreMaterial']         # Material
-                  ws['C18'] = float(row['Cantidad']) if pd.notna(row['Cantidad']) else 0.0 # Cantidad
-                  ws['C19'] = row['Unidad']                 # Unidad de medida
-                  ws['C20'] = row['LoteProveedor']          # Lote
-                  ws['C21'] = row['FechaProduccion']        # Fecha de Producción
-                  ws['C22'] = row['FechaVencimiento']       # Fecha de Vencimiento
+                  archivos_repo = os.listdir('.')
+                  plantillas_disponibles = [
+                      f for f in archivos_repo 
+                      if f.endswith('.xlsx') and ("R ICC" in f or "Check" in f or "Checklist" in f) and f != "Maestro_Materiales_Proveedores (2).xlsx"
+                  ]
                   
-                  if str(row['Temperatura']) != "N/A":
-                    ws['D39'] = float(row['Temperatura'])   # Temperatura del material
-                  
-                  ws['C51'] = row['Responsable']            # Persona que realiza la recepción
-                  ws['C53'] = nombre_supervisor             # Firma de Calidad
+                  ruta_plantilla = plantillas_disponibles[0] if plantillas_disponibles else "R ICC 14-1 Check List Recepción Materiales.xlsx"
+                  ruta_excel_final = os.path.join(
+                      ruta_destino, f"{prefijo_archivo}.xlsx"
+                  )
 
-                  wb.save(ruta_excel_final)
-                else:
-                  df_resp = pd.DataFrame([row])
-                  df_resp.to_excel(ruta_excel_final, index=False)
+                  if os.path.exists(ruta_plantilla):
+                    wb = openpyxl.load_workbook(ruta_plantilla)
+                    ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
+                    
+                    ws['C5'] = row['Fecha']
+                    ws['C16'] = row['Proveedor']
+                    ws['C17'] = row['NombreMaterial']
+                    ws['C18'] = float(row['Cantidad']) if pd.notna(row['Cantidad']) else 0.0
+                    ws['C19'] = row['Unidad']
+                    ws['C20'] = row['LoteProveedor']
+                    ws['C21'] = row['FechaProduccion']
+                    ws['C22'] = row['FechaVencimiento']
+                    
+                    if str(row['Temperatura']) != "N/A":
+                      ws['D39'] = float(row['Temperatura'])
+                    
+                    ws['C51'] = row['Responsable']
+                    ws['C53'] = nombre_supervisor
 
-                # Actualizar estado en CSV temporal
-                df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
-                df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(
-                    nombre_supervisor
-                )
-                df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = str(
-                    ruta_destino
-                )
-                df_p.loc[df_p["ID"] == row["ID"], "RutaExcel"] = str(
-                    ruta_excel_final
-                )
-                df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(
-                    ruta_cert_final
-                )
-                guardar_pendientes(df_p)
+                    wb.save(ruta_excel_final)
+                  else:
+                    df_resp = pd.DataFrame([row])
+                    df_resp.to_excel(ruta_excel_final, index=False)
 
-                st.success(
-                    "🎉 ¡Certificado PDF y Checklist de Excel oficial generados"
-                    f" con éxito! Guardado en: `{ruta_destino}`"
-                )
-                st.rerun()
+                  df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
+                  df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(
+                      nombre_supervisor
+                  )
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = str(
+                      ruta_destino
+                  )
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaExcel"] = str(
+                      ruta_excel_final
+                  )
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(
+                      ruta_cert_final
+                  )
+                  guardar_pendientes(df_p)
+
+                  st.success("🎉 ¡Aprobado y guardado con éxito!")
+                  st.rerun()
+
+          with col_btn2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🗑️ Eliminar Registro Pendiente", key=f"del_pend_{row['ID']}"):
+              df_p = df_p[df_p["ID"] != row["ID"]]
+              guardar_pendientes(df_p)
+              st.warning("⚠️ Registro eliminado del sistema.")
+              st.rerun()
+
   elif clave_ingresada == "":
     st.info("🔒 Por favor, ingrese la contraseña de supervisor (1234) para ver los registros pendientes.")
   else:
@@ -581,8 +553,8 @@ with tab2:
 with tab3:
   st.header("🔍 Buscador y Consulta de Registros Oficiales")
   st.markdown(
-      "Consulte el historial de recepciones aprobadas, descargue su checklist"
-      " oficial de Excel rellenado y los certificados firmados."
+      "Consulte el historial de recepciones aprobadas, descargue los"
+      " documentos o elimine registros del historial."
   )
 
   df_p = cargar_pendientes()
@@ -631,20 +603,20 @@ with tab3:
     )
 
     st.markdown("---")
-    st.subheader("📥 Descarga de Archivos Oficiales por Registro")
+    st.subheader("📥 Descarga de Archivos Oficiales y Gestión")
 
     for idx, row in resultado.iterrows():
       with st.expander(
           f"📁 Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']}"
           f" | Aprobado por: {row['FirmaCalidad']}"
       ):
-        col_d1, col_d2 = st.columns(2)
+        col_d1, col_d2, col_d3 = st.columns(3)
 
         with col_d1:
           if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and str(row["RutaExcel"]).strip() != "" and os.path.exists(str(row["RutaExcel"])):
             with open(row["RutaExcel"], "rb") as f:
               st.download_button(
-                  label="📊 Descargar Checklist Excel Oficial",
+                  label="📊 Descargar Excel Oficial",
                   data=f,
                   file_name=os.path.basename(str(row["RutaExcel"])),
                   mime=(
@@ -653,17 +625,24 @@ with tab3:
                   key=f"dl_excel_{row['ID']}",
               )
           else:
-            st.info("Archivo Excel en proceso o no disponible.")
+            st.info("Excel no disponible.")
 
         with col_d2:
           if "RutaPdfCert" in row and pd.notna(row["RutaPdfCert"]) and str(row["RutaPdfCert"]).strip() != "" and os.path.exists(str(row["RutaPdfCert"])):
             with open(row["RutaPdfCert"], "rb") as f:
               st.download_button(
-                  label="📄 Descargar Certificado Firmado (PDF)",
+                  label="📄 Descargar Certificado",
                   data=f,
                   file_name=os.path.basename(str(row["RutaPdfCert"])),
                   mime="application/pdf",
                   key=f"dl_pdf_{row['ID']}",
               )
           else:
-            st.info("Certificado PDF en proceso o no disponible.")
+            st.info("Certificado no disponible.")
+
+        with col_d3:
+          if st.button("🗑️ Borrar del Historial", key=f"del_apr_{row['ID']}"):
+            df_p = df_p[df_p["ID"] != row["ID"]]
+            guardar_pendientes(df_p)
+            st.warning("⚠️ Registro eliminado del historial oficial.")
+            st.rerun()
