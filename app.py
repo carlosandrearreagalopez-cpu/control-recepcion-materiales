@@ -105,7 +105,7 @@ with tab1:
   st.header("Formulario de Recepción de Materiales")
   st.markdown(
       "Selecciona la planta, el tipo de material, el proveedor y agrega los"
-      " productos que trae en este ingreso."
+      " productos junto con su certificado."
   )
 
   if df_db is not None:
@@ -146,7 +146,7 @@ with tab1:
 
     st.info(f"🏷️ **Criticidad Asociada al Material:** {criticidad_val}")
 
-    # Evaluar si requiere control de temperatura (Pulpa, Concentrado, Leche)
+    # Evaluar si requiere control de temperatura
     material_lower = str(material_sel).lower()
     tipo_lower = str(tipo_mat_sel).lower()
     requiere_temperatura = any(
@@ -155,7 +155,7 @@ with tab1:
     )
 
     with st.form("form_item_recepcion"):
-      st.subheader("2. Datos del Lote y Cantidades")
+      st.subheader("2. Datos del Lote, Cantidades y Certificado")
       c3, c4, c5 = st.columns(3)
       with c3:
         lote_proveedor = st.text_input(
@@ -180,13 +180,16 @@ with tab1:
       temperatura = "N/A"
       if requiere_temperatura:
         st.markdown("---")
-        st.subheader("❄️ Control de Temperatura (Requerido para este material)")
+        st.subheader("❄️ Control de Temperatura (Requerido)")
         temperatura = st.number_input(
-            "Temperatura de Recepción (°C)",
-            value=4.0,
-            format="%.1f",
-            help="Medición requerida para pulpa, concentrado o leche.",
+            "Temperatura de Recepción (°C)", value=4.0, format="%.1f"
         )
+
+      st.markdown("---")
+      st.subheader("📎 Certificado de Calidad del Producto")
+      certificado_file = st.file_uploader(
+          "Subir Foto o PDF del Certificado", type=["jpg", "jpeg", "png", "pdf"]
+      )
 
       agregar_item = st.form_submit_button(
           "➕ Agregar este producto a la lista de ingreso"
@@ -195,7 +198,19 @@ with tab1:
     if agregar_item:
       if not lote_proveedor:
         st.warning("⚠️ Debes ingresar el número de lote del proveedor.")
+      elif certificado_file is None:
+        st.warning(
+            "⚠️ Es obligatorio adjuntar la foto o PDF del certificado para este"
+            " producto."
+        )
       else:
+        os.makedirs("temp_certificados", exist_ok=True)
+        ruta_cert_temp = os.path.join(
+            "temp_certificados", certificado_file.name
+        )
+        with open(ruta_cert_temp, "wb") as f:
+          f.write(certificado_file.getbuffer())
+
         nuevo_item = {
             "Planta": planta_sel,
             "TipoMaterial": tipo_mat_sel,
@@ -208,10 +223,12 @@ with tab1:
             "Produccion": str(fecha_produccion),
             "Vencimiento": str(fecha_vencimiento),
             "Criticidad": criticidad_val,
+            "RutaTemp": ruta_cert_temp,
         }
         st.session_state.items_ingreso_actual.append(nuevo_item)
         st.success(
-            f"✅ ¡Producto '{material_sel}' agregado a la lista temporal!"
+            f"✅ ¡Producto '{material_sel}' agregado con su certificado a la"
+            " lista!"
         )
 
     # Resumen de lo agregado (Carrito)
@@ -219,44 +236,38 @@ with tab1:
       st.markdown("---")
       st.subheader("📋 Resumen de Productos Agregados en este Ingreso")
       df_carrito = pd.DataFrame(st.session_state.items_ingreso_actual)
-      st.dataframe(df_carrito, use_container_width=True)
+      # Mostrar columnas clave en la tabla
+      st.dataframe(
+          df_carrito[[
+              "Planta",
+              "Proveedor",
+              "NombreMaterial",
+              "Lote",
+              "Cantidad",
+              "Unidad",
+              "Criticidad",
+          ]],
+          use_container_width=True,
+      )
 
       if st.button("🗑️ Limpiar lista actual"):
         st.session_state.items_ingreso_actual = []
         st.rerun()
 
       st.markdown("---")
-      st.subheader(
-          "3. Finalizar Ingreso (Responsable y Certificado de Calidad)"
-      )
+      st.subheader("3. Finalizar y Enviar a Revisión de Calidad")
       with st.form("form_finalizar_envio"):
         responsable = st.text_input(
             "Operador Responsable", placeholder="Tu Nombre Completo"
         )
-        certificado_file = st.file_uploader(
-            "📎 Adjuntar Certificado de Calidad del Proveedor (Imagen o PDF)",
-            type=["jpg", "jpeg", "png", "pdf"],
-        )
         enviar_todo = st.form_submit_button(
-            "🚀 Enviar Todo a Revisión de Calidad", type="primary"
+            "🚀 Enviar Todos los Productos a Calidad", type="primary"
         )
 
       if enviar_todo:
         if not responsable:
           st.error("⚠️ Por favor ingresa el nombre del operador responsable.")
-        elif certificado_file is None:
-          st.error(
-              "⚠️ Es obligatorio adjuntar el certificado de calidad general o"
-              " del lote."
-          )
         else:
-          os.makedirs("temp_certificados", exist_ok=True)
-          ruta_cert_temp = os.path.join(
-              "temp_certificados", certificado_file.name
-          )
-          with open(ruta_cert_temp, "wb") as f:
-            f.write(certificado_file.getbuffer())
-
           df_p = cargar_pendientes()
           nuevo_id = len(df_p) + 1 if not df_p.empty else 1
 
@@ -278,7 +289,7 @@ with tab1:
                 "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "Estado": "Pendiente",
                 "FirmaCalidad": "Sin firmar",
-                "RutaCarpeta": ruta_cert_temp,
+                "RutaCarpeta": item["RutaTemp"],
             }
             df_p = pd.concat(
                 [df_p, pd.DataFrame([nuevo_registro])], ignore_index=True
@@ -288,8 +299,8 @@ with tab1:
           guardar_pendientes(df_p)
           st.session_state.items_ingreso_actual = []
           st.success(
-              "🎉 ¡Todos los productos agregados fueron enviados con éxito al"
-              " panel de calidad!"
+              "🎉 ¡Todos los productos con sus certificados fueron enviados"
+              " con éxito al panel de calidad!"
           )
   else:
     st.warning(
