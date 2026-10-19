@@ -341,7 +341,7 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
-      " datos y apruebe para rellenar campo por campo su plantilla oficial de"
+      " datos y apruebe para rellenar exactamente su checklist oficial de"
       " Excel."
   )
 
@@ -397,7 +397,7 @@ with tab2:
                 "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
             )
             aprobar = st.form_submit_button(
-                "Aprobar y Rellenar Plantilla Oficial de Excel 🛡️",
+                "Aprobar y Rellenar Checklist Oficial de Excel 🛡️",
                 type="primary",
             )
 
@@ -408,7 +408,7 @@ with tab2:
               )
             else:
               with st.spinner(
-                  "Rellenando tu plantilla oficial de Excel campo por campo..."
+                  "Rellenando celdas de tu plantilla oficial de Excel..."
               ):
                 carpeta_base = "./Registros_Oficiales"
                 subcarpeta_lote = (
@@ -478,61 +478,38 @@ with tab2:
                   else:
                     os.rename(row["RutaPdfCert"], ruta_cert_final)
 
-                # RELLENAR CAMPO POR CAMPO TU PLANTILLA OFICIAL DE EXCEL
+                # RELLENAR EXACTAMENTE LAS CELDAS DE TU CHECKLIST OFICIAL
                 prefijo_archivo = (
                     f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
                     )
                 )
                 
-                # Buscar tu archivo de checklist oficial en el repositorio
-                plantillas_disponibles = [
-                    f for f in os.listdir('.') 
-                    if f.endswith('.xlsx') and f != "Maestro_Materiales_Proveedores (2).xlsx"
-                ]
-                
-                ruta_plantilla = plantillas_disponibles[0] if plantillas_disponibles else "plantilla_checklist.xlsx"
+                ruta_plantilla = "R ICC 14-1 Check List Recepción Materiales.xlsx"
                 ruta_excel_final = os.path.join(
                     ruta_destino, f"{prefijo_archivo}.xlsx"
                 )
 
                 if os.path.exists(ruta_plantilla):
                   wb = openpyxl.load_workbook(ruta_plantilla)
-                  ws = wb.active
+                  # Usar la pestaña "Recepción" o la activa
+                  ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
                   
-                  # Diccionario con los datos exactos del ingreso
-                  datos_a_llenar = {
-                      "planta": row["Planta"],
-                      "tipo": row["TipoMaterial"],
-                      "material": row["NombreMaterial"],
-                      "proveedor": row["Proveedor"],
-                      "lote": row["LoteProveedor"],
-                      "cantidad": row["Cantidad"],
-                      "unidad": row["Unidad"],
-                      "temperatura": row["Temperatura"],
-                      "produccion": row["FechaProduccion"],
-                      "vencimiento": row["FechaVencimiento"],
-                      "criticidad": row["Criticidad"],
-                      "operador": row["Responsable"],
-                      "supervisor": nombre_supervisor,
-                      "fecha": row["Fecha"]
-                  }
+                  # Inyección exacta campo por campo basada en las coordenadas de tu formato
+                  ws['C5'] = row['Fecha']                   # Fecha de recepción
+                  ws['C16'] = row['Proveedor']              # Proveedor
+                  ws['C17'] = row['NombreMaterial']         # Material
+                  ws['C18'] = float(row['Cantidad']) if pd.notna(row['Cantidad']) else 0.0 # Cantidad
+                  ws['C19'] = row['Unidad']                 # Unidad de medida
+                  ws['C20'] = row['LoteProveedor']          # Lote
+                  ws['C21'] = row['FechaProduccion']        # Fecha de Producción
+                  ws['C22'] = row['FechaVencimiento']       # Fecha de Vencimiento
                   
-                  # Barrido inteligente campo por campo para rellenar celdas adyacentes a las etiquetas
-                  for row_idx in range(1, ws.max_row + 1):
-                    for col_idx in range(1, ws.max_column + 1):
-                      try:
-                        cell = ws.cell(row=row_idx, column=col_idx)
-                        cell_val = str(cell.value).strip().lower()
-                        
-                        for clave, valor in datos_a_llenar.items():
-                          if clave in cell_val:
-                            # Rellenar la celda de la derecha o la celda inferior según el formato típico de checklist
-                            target_cell = ws.cell(row=row_idx, column=col_idx + 1)
-                            if target_cell.value is None or str(target_cell.value).strip() == "":
-                              target_cell.value = valor
-                      except Exception:
-                        pass
+                  if str(row['Temperatura']) != "N/A":
+                    ws['D39'] = float(row['Temperatura'])   # Temperatura del material
+                  
+                  ws['C51'] = row['Responsable']            # Operador que realiza la recepción
+                  ws['C53'] = nombre_supervisor             # Firma / Supervisor de Calidad
 
                   wb.save(ruta_excel_final)
                 else:
@@ -556,7 +533,7 @@ with tab2:
                 guardar_pendientes(df_p)
 
                 st.success(
-                    "🎉 ¡Plantilla de Excel oficial rellenada y firmada con éxito! "
+                    "🎉 ¡Checklist oficial de Excel rellenado y firmado con éxito! "
                     f"Guardado en: `{ruta_destino}`"
                 )
                 st.rerun()
@@ -631,7 +608,7 @@ with tab3:
       ):
         col_d1, col_d2 = st.columns(2)
 
-        # Botón para descargar el Excel oficial completado campo por campo
+        # Botón para descargar el Excel oficial rellenado campo por campo
         with col_d1:
           if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and str(row["RutaExcel"]).strip() != "" and os.path.exists(str(row["RutaExcel"])):
             with open(row["RutaExcel"], "rb") as f:
