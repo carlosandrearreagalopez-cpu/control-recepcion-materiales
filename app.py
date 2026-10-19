@@ -249,7 +249,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(35, h_row, 'Fecha de recepción:', 1, 0, 'R')
     pdf.set_font('Arial', '', 7)
-    # Usa la fecha de ingreso SAP seleccionada por el usuario
     fecha_ingreso_sap = str(row.get('IngresoSAP', ''))
     pdf.cell(60, h_row, fecha_ingreso_sap if fecha_ingreso_sap != 'nan' else str(row.get('Fecha', '')).split()[0], 1, 0, 'C')
     pdf.cell(15, h_row, '', 0, 0)
@@ -622,7 +621,6 @@ with tab1:
       with c4:
         cantidad = st.number_input("Cantidad Recibida", min_value=0.0, format="%.2f")
       with c5:
-        # Se incluye "Sacos" en las unidades
         unidad = st.selectbox("Unidad de Medida", ["Kg", "Litros", "Sacos", "Unidades", "Toneladas", "Galones", "Cajas"])
 
       c6, c7 = st.columns(2)
@@ -881,7 +879,7 @@ with tab4:
     columnas_reporte = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor", "LoteProveedor", 
         "FacturaGuia", "Placa", "IngresoSAP", "DocSAP", "EstadoMarchamo", "Marchamo",
-        "Cantidad", "Unidad", "TempTransporte", "TempMaterial", "Criticidad", "IngresoSAP", "Responsable", "FirmaCalidad"
+        "Cantidad", "Unidad", "TempTransporte", "TempMaterial", "Criticidad", "Responsable", "FirmaCalidad"
     ]
     df_reporte = aprobados_excel[columnas_reporte].copy()
     st.dataframe(df_reporte, use_container_width=True)
