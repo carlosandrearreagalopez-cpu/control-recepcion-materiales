@@ -118,29 +118,27 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # ------------------------------------------
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
 # ------------------------------------------
-def dibujar_opciones(pdf, x_start, y, h_row, opts, idx_checked, spacing=6):
-    """Dibuja un conjunto de casillas adaptándose al ancho del texto para evitar traslapes."""
+def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
+    """Dibuja opciones de manera estricta dentro del ancho asignado (95mm para las preguntas)."""
     curr_x = x_start
+    ancho_bloque = 95.0 / len(opts)
     for i, opt in enumerate(opts):
         pdf.set_xy(curr_x, y)
         pdf.set_font('Arial', '', 7)
-        # Calcular ancho del texto exacto
         w_text = pdf.get_string_width(opt) + 1
         pdf.cell(w_text, h_row, opt, 0, 0, 'R')
         
-        # Dibujar cajita justo después del texto
-        box_x = curr_x + w_text + 1
+        box_x = curr_x + w_text + 1.5
         box_y = y + (h_row - 3) / 2
         pdf.rect(box_x, box_y, 3, 3)
         if i == idx_checked:
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
             pdf.cell(3, 3, 'X', 0, 0, 'C')
-            
-        # Avanzar el cursor para la siguiente opción
-        curr_x += w_text + 4 + spacing
+        curr_x += ancho_bloque
 
 def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
+    # Ancho total útil: 277 mm (A4 Horizontal con 10mm de margen a cada lado)
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     pdf.set_auto_page_break(auto=False)
@@ -216,12 +214,11 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
-    pdf.cell(50, h_row, '¿El marchamo se encuentra alterado?', 0, 0) # Ampliado
+    pdf.cell(50, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
     
-    # Casillas de marchamo
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
-    dibujar_opciones(pdf, 70, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m) # Desplazado a 70
+    dibujar_opciones_bloque(pdf, 65, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
 
     pdf.set_xy(15, y_start + h_row)
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
@@ -232,7 +229,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(40, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
     idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
-    dibujar_opciones(pdf, 160, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
+    dibujar_opciones_bloque(pdf, 158, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
 
     pdf.set_xy(200, y_start + h_row/2)
     pdf.set_font('Arial', 'B', 7)
@@ -281,19 +278,21 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     for num, preg, opts, val_esp, accion in preguntas_mat:
         y_curr = pdf.get_y()
+        # Estructura fija de celdas absolutas para garantizar 0 desfases
+        pdf.set_xy(10, y_curr)
         pdf.set_font('Arial', 'B', 7)
         pdf.cell(5, h_row, num, 1, 0, 'C')
         pdf.set_font('Arial', '', 7)
         pdf.cell(130, h_row, preg, 1, 0, 'L')
-        pdf.cell(55, h_row, '', 1, 0)
+        pdf.cell(55, h_row, '', 1, 0) # Celda contenedora de opciones
         
-        idx_chk = 0 # Default SI
+        idx_chk = 0 
         if num == "4":
             idx_chk = 0 if criticidad=="I" else (1 if criticidad=="II" else 2)
             
-        # Modificado: Se desplaza X_start a 148 para no superponerse con la celda de pregunta
-        dibujar_opciones(pdf, 148, y_curr, h_row, opts, idx_chk)
+        dibujar_opciones_bloque(pdf, 148, y_curr, h_row, opts, idx_chk)
 
+        pdf.set_xy(200, y_curr)
         pdf.set_font('Arial', 'B', 7)
         if val_esp == "------":
             pdf.set_fill_color(200, 200, 200)
@@ -321,14 +320,16 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     for num, preg, val_esp, accion in preguntas_trans:
         y_curr = pdf.get_y()
+        pdf.set_xy(10, y_curr)
         pdf.set_font('Arial', 'B', 7)
         pdf.cell(5, h_row, num, 1, 0, 'C')
         pdf.set_font('Arial', '', 7)
         pdf.cell(130, h_row, preg, 1, 0, 'L')
         pdf.cell(55, h_row, '', 1, 0)
         
-        dibujar_opciones(pdf, 148, y_curr, h_row, ["SI", "NO"], 0) # X inicial a 148
+        dibujar_opciones_bloque(pdf, 148, y_curr, h_row, ["SI", "NO"], 0)
 
+        pdf.set_xy(200, y_curr)
         pdf.set_font('Arial', 'B', 7)
         pdf.cell(30, h_row, val_esp, 1, 0, 'C')
         pdf.set_font('Arial', '', 7)
@@ -339,6 +340,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     temp_mat = str(row.get('TempMaterial', 'N/A'))
     
     y_curr = pdf.get_y()
+    pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(5, h_row, '14', 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
@@ -346,17 +348,19 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(55, h_row, '', 'LTR', 0)
     
     idx_temp = 2 if (temp_trans == "N/A" and temp_mat == "N/A") else 0
-    dibujar_opciones(pdf, 148, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp) # X inicial a 148
+    dibujar_opciones_bloque(pdf, 148, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
     
+    pdf.set_xy(200, y_curr)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(30, h_row, "SI", 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
     pdf.cell(57, h_row, "Rechazar lote", 'LTR', 1, 'C')
 
-    # Fila combinada de temperaturas (alineada con el diseño)
+    # Fila combinada de temperaturas
+    y_curr = pdf.get_y()
+    pdf.set_xy(10, y_curr)
     pdf.cell(5, h_row, '', 'LBR', 0)
     pdf.set_font('Arial', 'B', 7)
-    # Centrado en el espacio restante para evitar que "Temperatura Transporte" choque
     pdf.cell(130, h_row, f"Temperatura Transporte (°C): {temp_trans}           Temperatura del Material (°C): {temp_mat}", 'BR', 0, 'C')
     pdf.cell(55, h_row, '', 'BR', 0)
     pdf.cell(30, h_row, '', 'BR', 0)
@@ -364,12 +368,16 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     # Pregunta 15
     y_curr = pdf.get_y()
+    pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(5, h_row, '15', 1, 0, 'C')
     pdf.set_font('Arial', '', 7)
     pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
     pdf.cell(55, h_row, '', 1, 0)
-    dibujar_opciones(pdf, 148, y_curr, h_row, ["SI", "NO"], 0) # X inicial a 148
+    
+    dibujar_opciones_bloque(pdf, 148, y_curr, h_row, ["SI", "NO"], 0) 
+    
+    pdf.set_xy(200, y_curr)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(30, h_row, "SI", 1, 0, 'C')
     pdf.set_font('Arial', '', 7)
@@ -383,8 +391,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(10, y_curr+2)
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(70, 4, 'Resultado final:', 0, 0, 'R')
-    # Se añade spacing=12 para que "Aprobado" y "Desaprobado" no se superpongan
-    dibujar_opciones(pdf, 85, y_curr+2, 4, ["Aprobado", "Desaprobado"], 0, spacing=12)
+    dibujar_opciones_bloque(pdf, 85, y_curr+2, 4, ["Aprobado", "Desaprobado"], 0)
     
     pdf.ln(6)
     pdf.set_font('Arial', 'B', 7)
@@ -392,39 +399,42 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS ARREGLADO ---
-    pdf.ln(12)
-    y_firmas = pdf.get_y()
+    # --- ESPACIO DE FIRMAS ---
+    pdf.ln(15) 
+    y_linea = pdf.get_y()
 
-    # Inserción de imágenes de firma colocadas justo encima de las líneas
+    # 1. Dibujar las líneas
+    pdf.line(55, y_linea, 115, y_linea)   
+    pdf.line(180, y_linea, 240, y_linea)  
+
+    # 2. Insertar Imágenes de las firmas ENCIMA de la línea
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
-            pdf.image(ruta_firma_op, x=65, y=y_firmas - 6, w=30, h=8)
+            pdf.image(ruta_firma_op, x=65, y=y_linea - 14, w=40, h=13)
         except Exception: pass
         
     ruta_firma_sup = str(row.get('RutaFirmaSup', ''))
     if ruta_firma_sup and os.path.exists(ruta_firma_sup):
         try:
-            pdf.image(ruta_firma_sup, x=190, y=y_firmas - 6, w=30, h=8)
+            pdf.image(ruta_firma_sup, x=190, y=y_linea - 14, w=40, h=13)
         except Exception: pass
 
-    # Dibujar las líneas de firma visuales
-    pdf.line(55, y_firmas + 2, 115, y_firmas + 2)
-    pdf.line(180, y_firmas + 2, 240, y_firmas + 2)
-
-    # Etiquetas de debajo de las líneas
-    pdf.set_xy(10, y_firmas + 4)
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(45, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'L')
+    # 3. Nombres impresos justo ENCIMA de la línea 
+    pdf.set_xy(55, y_linea - 4)
     pdf.set_font('Arial', '', 8)
     pdf.cell(60, 4, str(row.get('Responsable', '')), 0, 0, 'C')
     
+    pdf.set_xy(180, y_linea - 4)
+    pdf.cell(60, 4, supervisor, 0, 0, 'C')
+
+    # 4. Textos de "Nombre de la persona" y "Vo. Bo." DEBAJO de la línea
+    pdf.set_xy(10, y_linea + 1)
     pdf.set_font('Arial', 'B', 8)
-    pdf.set_xy(150, y_firmas + 4)
+    pdf.cell(45, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'L')
+    
+    pdf.set_xy(150, y_linea + 1)
     pdf.cell(30, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(60, 4, supervisor, 0, 1, 'C')
 
     pdf.output(ruta_guardado_temp)
 
