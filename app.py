@@ -40,7 +40,7 @@ ARCHIVO_PENDIENTES = "registros_pendientes.csv"
 ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
 
 # ------------------------------------------
-# FUNCIONES DE DATOS Y GENERACIÓN PDF
+# FUNCIONES DE DATOS
 # ------------------------------------------
 def cargar_pendientes():
   if os.path.exists(ARCHIVO_PENDIENTES):
@@ -72,138 +72,240 @@ def cargar_pendientes():
 def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
+# ------------------------------------------
+# GENERADOR DEL PDF HORIZONTAL (R ICC-14-1)
+# ------------------------------------------
+def dibujar_casilla(pdf, texto, x, y, marcado=False):
+    pdf.set_xy(x, y)
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(10, 5, texto, 0, 0, 'R')
+    pdf.rect(x + 11, y + 1, 3, 3, style='D' if not marcado else 'DF')
+
 def generar_pdf_ricc14(row, supervisor, ruta_guardado):
-    pdf = FPDF('P', 'mm', 'A4')
+    # Formato A4 Horizontal (297 x 210 mm). Márgenes de 10mm -> Ancho útil = 277mm
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
+    pdf.set_margins(10, 10, 10)
+    pdf.set_auto_page_break(auto=True, margin=10)
+    pdf.set_fill_color(220, 230, 241) # Color gris claro para encabezados
     
-    # --- ENCABEZADO ---
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(45, 10, 'Codigo: R ICC-14-1', border=1, align='C')
-    pdf.cell(100, 10, 'Aseguramiento de Calidad', border=1, align='C')
-    pdf.cell(45, 10, 'Version: 5', border=1, align='C', ln=1)
-    
-    pdf.set_font('Arial', 'B', 11)
-    pdf.cell(190, 8, 'Check list de recepcion de materiales', border=1, align='C', ln=1)
-    pdf.ln(3)
-
-    # --- DATOS GENERALES ---
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(35, 6, 'Fecha de recepcion:', border=1)
-    pdf.cell(60, 6, str(row.get('Fecha', '')).split()[0], border=1)
-    pdf.cell(45, 6, 'Factura/Guia del proveedor:', border=1)
-    pdf.cell(50, 6, str(row.get('FacturaGuia', '')), border=1, ln=1)
-    
-    pdf.cell(35, 6, 'Nombre transporte:', border=1)
-    pdf.cell(60, 6, str(row.get('Transporte', '')), border=1)
-    pdf.cell(45, 6, 'Fecha de ingreso a SAP:', border=1)
-    pdf.cell(50, 6, str(row.get('IngresoSAP', 'N/A')), border=1, ln=1)
-
-    pdf.cell(35, 6, 'Placa del transporte:', border=1)
-    pdf.cell(60, 6, str(row.get('Placa', '')), border=1)
-    pdf.cell(45, 6, 'No. Documento SAP:', border=1)
-    pdf.cell(50, 6, str(row.get('DocSAP', 'N/A')), border=1, ln=1)
-    pdf.ln(3)
-
-    # --- MARCHAMO Y CANDADO ---
-    pdf.set_fill_color(220, 230, 241)
+    # ---------------- ENCABEZADO ----------------
     pdf.set_font('Arial', 'B', 8)
-    pdf.cell(95, 6, 'Inspeccion del Marchamo', border=1, align='C', fill=True)
-    pdf.cell(95, 6, 'Inspeccion del Candado', border=1, align='C', fill=True, ln=1)
-    
+    # Fila 1
+    pdf.cell(30, 5, 'Código:', 'LT', 0, 'R')
     pdf.set_font('Arial', '', 8)
-    pdf.cell(95, 6, 'El marchamo se encuentra alterado?   NO', border=1)
-    pdf.cell(95, 6, 'El candado se encuentra alterado?   NO', border=1, ln=1)
-    pdf.cell(95, 6, f"No. de marchamo: {row.get('Marchamo', 'N/A')}", border=1)
-    pdf.cell(95, 6, '', border=1, ln=1)
+    pdf.cell(40, 5, 'R ICC - 14-1', 'TR', 0, 'C')
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(167, 5, 'Aseguramiento de Calidad', 'LTR', 0, 'C')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(40, 5, 'Vigente a partir de:', 'LTR', 1, 'C')
+    # Fila 2
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(30, 5, 'Versión:', 'LB', 0, 'R')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(40, 5, '5', 'BR', 0, 'C')
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(167, 5, 'Check list de recepción de materiales', 'LBR', 0, 'C')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(40, 5, 'feb-23', 'LBR', 1, 'C')
     pdf.ln(3)
 
-    # --- INSPECCIÓN DEL MATERIAL ---
+    # ---------------- DATOS GENERALES ----------------
     pdf.set_font('Arial', 'B', 8)
-    pdf.cell(190, 6, 'Inspeccion del Material', border=1, align='C', fill=True, ln=1)
     
+    pdf.cell(40, 6, 'Fecha de recepción:', 1, 0, 'R')
     pdf.set_font('Arial', '', 8)
-    pdf.cell(35, 6, 'Proveedor:', border=1)
-    pdf.cell(155, 6, str(row.get('Proveedor', '')), border=1, ln=1)
-    
-    pdf.cell(35, 6, 'Material:', border=1)
-    pdf.cell(155, 6, str(row.get('NombreMaterial', '')), border=1, ln=1)
-    
-    pdf.cell(35, 6, 'Cantidad:', border=1)
-    pdf.cell(60, 6, str(row.get('Cantidad', '')), border=1)
-    pdf.cell(35, 6, 'Unidad de medida:', border=1)
-    pdf.cell(60, 6, str(row.get('Unidad', '')), border=1, ln=1)
-    
-    pdf.cell(35, 6, 'Lote:', border=1)
-    pdf.cell(60, 6, str(row.get('LoteProveedor', '')), border=1)
-    pdf.cell(35, 6, 'Temp. Material (C):', border=1)
-    temp_str = str(row.get('Temperatura', 'N/A'))
-    pdf.cell(60, 6, temp_str if temp_str not in ["nan", ""] else "N/A", border=1, ln=1)
-    
-    pdf.cell(35, 6, 'Fecha Produccion:', border=1)
-    pdf.cell(60, 6, str(row.get('FechaProduccion', '')), border=1)
-    pdf.cell(35, 6, 'Fecha Vencimiento:', border=1)
-    pdf.cell(60, 6, str(row.get('FechaVencimiento', '')), border=1, ln=1)
+    pdf.cell(70, 6, str(row.get('Fecha', '')).split()[0], 1, 0, 'C')
+    pdf.cell(20, 6, '', 0, 0) # Espacio
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(60, 6, 'Número de factura y/o guía del proveedor:', 1, 0, 'R')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(70, 6, str(row.get('FacturaGuia', '')), 1, 1, 'C')
+
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(40, 6, 'Nombre del transporte:', 1, 0, 'R')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(70, 6, str(row.get('Transporte', '')), 1, 0, 'C')
+    pdf.cell(20, 6, '', 0, 0)
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(60, 6, 'Fecha de Ingreso a SAP:', 1, 0, 'R')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(70, 6, str(row.get('IngresoSAP', '')), 1, 1, 'C')
+
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(40, 6, 'Placa del transporte:', 1, 0, 'R')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(70, 6, str(row.get('Placa', '')), 1, 0, 'C')
+    pdf.cell(20, 6, '', 0, 0)
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(60, 6, 'Número de documento de ingreso a SAP:', 1, 0, 'R')
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(70, 6, str(row.get('DocSAP', '')), 1, 1, 'C')
     pdf.ln(3)
 
-    # --- PREGUNTAS DEL MATERIAL ---
+    # ---------------- MARCHAMO Y CANDADO ----------------
     pdf.set_font('Arial', 'B', 8)
-    pdf.cell(160, 6, 'Criterio de Evaluacion (Material)', border=1)
-    pdf.cell(30, 6, 'Resultado', border=1, align='C', ln=1)
+    pdf.cell(100, 5, 'Inspección del Marchamo', 0, 0, 'L', fill=True)
+    pdf.cell(5, 5, '', 0, 0)
+    pdf.cell(100, 5, 'Inspección del Candado', 0, 0, 'L', fill=True)
+    pdf.cell(5, 5, '', 0, 0)
+    pdf.cell(20, 5, 'Valor esperado', 0, 0, 'C')
+    pdf.cell(47, 5, 'Acción en caso de desviación', 0, 1, 'C')
+
+    y_start = pdf.get_y()
+    pdf.rect(10, y_start, 100, 10)
+    pdf.rect(115, y_start, 100, 10)
+    pdf.rect(220, y_start, 20, 10)
+    pdf.rect(240, y_start, 47, 10)
+
+    # Q1 & Q2
+    pdf.set_xy(10, y_start + 1)
+    pdf.cell(5, 8, '1', 0, 0, 'C')
+    pdf.cell(50, 4, '¿El marchamo se encuentra alterado?', 0, 0)
+    # Checkboxes Marchamo (Marcamos NO por defecto ideal)
+    dibujar_casilla(pdf, "SI", 65, y_start + 1)
+    dibujar_casilla(pdf, "NO", 80, y_start + 1, marcado=True)
+    dibujar_casilla(pdf, "N/A", 95, y_start + 1)
     
-    pdf.set_font('Arial', '', 8)
+    pdf.set_xy(15, y_start + 5)
+    pdf.cell(25, 4, 'No. de marchamo:', 0, 0)
+    pdf.cell(50, 4, str(row.get('Marchamo', '')), 'B', 0, 'C')
+
+    pdf.set_xy(115, y_start + 2)
+    pdf.cell(5, 6, '2', 0, 0, 'C')
+    pdf.cell(50, 6, '¿El candado se encuentra alterado?', 0, 0)
+    dibujar_casilla(pdf, "SI", 170, y_start + 2)
+    dibujar_casilla(pdf, "NO", 185, y_start + 2, marcado=True)
+    dibujar_casilla(pdf, "N/A", 200, y_start + 2)
+
+    pdf.set_xy(220, y_start + 2)
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(20, 6, 'NO', 0, 0, 'C')
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(47, 6, 'Retener el lote y emitir reclamo.', 0, 1, 'C')
+    pdf.ln(3)
+
+    # ---------------- INSPECCIÓN DEL MATERIAL ----------------
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(210, 5, 'Inspección del Material', 0, 0, 'L', fill=True)
+    pdf.cell(20, 5, 'Valor esperado', 0, 0, 'C', fill=True)
+    pdf.cell(47, 5, 'Acción en caso de desviación', 0, 1, 'C', fill=True)
+
+    # Filas de datos de material
+    datos_mat = [
+        ("Proveedor:", str(row.get('Proveedor', ''))),
+        ("Material:", str(row.get('NombreMaterial', ''))),
+        ("Cantidad:", str(row.get('Cantidad', ''))),
+        ("Unidad de medida:", str(row.get('Unidad', ''))),
+        ("Lote:", str(row.get('LoteProveedor', ''))),
+        ("Fecha de Producción:", str(row.get('FechaProduccion', ''))),
+        ("Fecha de Vencimiento:", str(row.get('FechaVencimiento', '')))
+    ]
+
+    for etiqueta, valor in datos_mat:
+        pdf.set_font('Arial', 'B', 8)
+        pdf.cell(40, 5, etiqueta, 1, 0, 'R')
+        pdf.set_font('Arial', '', 8)
+        pdf.cell(170, 5, valor, 1, 0, 'C')
+        # Celdas grises derechas
+        pdf.set_fill_color(200, 200, 200)
+        pdf.cell(20, 5, '------', 1, 0, 'C', fill=True)
+        pdf.cell(47, 5, '------', 1, 1, 'C', fill=True)
+
+    pdf.set_fill_color(220, 230, 241) # Reset fill
+    
+    # Preguntas Material
     preguntas_mat = [
-        "Tomando en cuenta la fecha, el lote posee mas de un mes de vida?",
-        f"Categoria de la matriz de materiales a recibir: {row.get('Criticidad', 'N/A')}",
-        "El Certificado de Analisis corresponde al numero de lote?",
-        "Los resultados de los Certificados cumplen parametros criticos?",
-        "El empaque del material se encuentra integro y sin deterioro?",
-        "El material esta protegido de la intemperie?",
-        "Coincide la entrega segun documento contra lo fisico?"
+        ("3", "Tomando en cuenta la fecha del día de hoy y la respuesta anterior, ¿El (los) lote(s) posee(n) más de un mes de vida?", ["SI", "NO", "N/A"], "SI", "Retener el lote y emitir reclamo"),
+        ("4", "¿A qué categoría de la matriz de materiales pertenece el insumo a recibir?", ["I", "II", "III"], "------", "------"),
+        ("5", "¿El Certificado de Análisis físico/digital (si aplica), corresponde al número de lote?", ["SI", "NO", "N/A"], "SI", "Rechazar el lote y emitir reclamo"),
+        ("6", "¿Los resultados de los Certificados de Análisis cumple(n) con los parámetros críticos de la Especificación del Material a Recibir?", ["SI", "NO", "N/A"], "SI", "Rechazar el lote y emitir reclamo"),
+        ("7", "¿El empaque del material se encuentra íntegro y sin deterioro?", ["SI", "NO", "N/A"], "SI", "Rechazar el lote y emitir reclamo"),
+        ("8", "¿El material está protegido de la intemperie?", ["SI", "NO", "N/A"], "SI", "Rechazar el lote y emitir reclamo"),
+        ("9", "¿Coincide la entrega según documento, contra lo físico en cantidad y forma?", ["SI", "NO", "N/A"], "SI", "Rechazar el lote y emitir reclamo")
     ]
-    for p in preguntas_mat:
-        pdf.cell(160, 6, p, border=1)
-        pdf.cell(30, 6, "SI (Cumple)", border=1, align='C', ln=1)
-    pdf.ln(3)
 
-    # --- PREGUNTAS DEL TRANSPORTE ---
+    criticidad = str(row.get('Criticidad', 'I'))
+
+    for i, (num, preg, opts, val_esp, accion) in enumerate(preguntas_mat):
+        y_curr = pdf.get_y()
+        pdf.set_font('Arial', 'B', 8)
+        pdf.cell(5, 6, num, 1, 0, 'C')
+        pdf.set_font('Arial', '', 7)
+        # Adapt text width
+        pdf.cell(100, 6, preg[:85] + ("..." if len(preg)>85 else ""), 1, 0, 'L')
+        
+        # Bloque para la caja (simulando 1 proveedor)
+        pdf.cell(105, 6, '', 1, 0)
+        
+        # Dibujar casillas
+        if num == "4":
+            dibujar_casilla(pdf, opts[0], 120, y_curr+1, marcado=(criticidad=="I"))
+            dibujar_casilla(pdf, opts[1], 135, y_curr+1, marcado=(criticidad=="II"))
+            dibujar_casilla(pdf, opts[2], 150, y_curr+1, marcado=(criticidad=="III"))
+        else:
+            dibujar_casilla(pdf, opts[0], 120, y_curr+1, marcado=True)
+            dibujar_casilla(pdf, opts[1], 135, y_curr+1)
+            dibujar_casilla(pdf, opts[2], 150, y_curr+1)
+
+        pdf.set_font('Arial', 'B', 8)
+        if val_esp == "------":
+            pdf.set_fill_color(200, 200, 200)
+            pdf.cell(20, 6, val_esp, 1, 0, 'C', fill=True)
+            pdf.cell(47, 6, accion, 1, 1, 'C', fill=True)
+            pdf.set_fill_color(220, 230, 241)
+        else:
+            pdf.cell(20, 6, val_esp, 1, 0, 'C')
+            pdf.set_font('Arial', '', 7)
+            pdf.cell(47, 6, accion, 1, 1, 'C')
+
+    pdf.ln(2)
+
+    # ---------------- INSPECCIÓN DEL TRANSPORTE ----------------
     pdf.set_font('Arial', 'B', 8)
-    pdf.cell(190, 6, 'Inspeccion del Transporte', border=1, align='C', fill=True, ln=1)
-    pdf.cell(160, 6, 'Criterio de Evaluacion (Transporte)', border=1)
-    pdf.cell(30, 6, 'Resultado', border=1, align='C', ln=1)
-    
-    pdf.set_font('Arial', '', 8)
+    pdf.cell(210, 5, 'Inspección del Transporte', 0, 0, 'L', fill=True)
+    pdf.cell(67, 5, '', 0, 1)
+
     preguntas_trans = [
-        ("Se encuentra el transporte libre de plagas?", "SI"),
-        ("El techo, paredes del transporte o lona estan integras?", "SI"),
-        ("El techo, paredes del transporte o lona estan limpios?", "SI"),
-        ("El piso del transporte esta limpio y en buenas condiciones?", "SI"),
-        ("El transporte cumple con la temperatura especificada?", "SI" if temp_str != "N/A" else "N/A"),
-        ("El transporte se encuentra libre de olores extranos?", "SI"),
-        ("La tarima de uso retornable se encuentra en buenas condiciones?", "SI")
+        ("10", "¿Se encuentra el transporte libre de plagas?", "SI", "Rechazar el lote y emitir reclamo"),
+        ("11", "¿El techo, las paredes del transporte o lona (cuando aplique) se encuentran íntegras y sin agujeros?", "SI", "Rechazar el lote y emitir reclamo"),
+        ("12", "¿El techo, las paredes del transporte o lona (cuando aplique) se encuentran limpios?", "SI", "Rechazar el lote y emitir reclamo"),
+        ("13", "¿El piso del transporte está limpio y en buenas condiciones?", "SI", "Emitir reclamo")
     ]
-    for p, res in preguntas_trans:
-        pdf.cell(160, 6, p, border=1)
-        pdf.cell(30, 6, res, border=1, align='C', ln=1)
-    pdf.ln(4)
 
-    # --- RESULTADO FINAL ---
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(35, 8, 'Resultado final:', border=1)
-    pdf.set_text_color(0, 128, 0) # Verde
-    pdf.cell(155, 8, 'APROBADO', border=1, align='C', ln=1)
-    pdf.set_text_color(0, 0, 0)
-    
-    pdf.set_font('Arial', '', 8)
-    pdf.multi_cell(190, 6, 'OBSERVACIONES: Validacion digital autorizada en plataforma. Se adjunta documento oficial del proveedor en la carpeta de trazabilidad correspondiente.', border=1)
-    pdf.ln(6)
+    for num, preg, val_esp, accion in preguntas_trans:
+        y_curr = pdf.get_y()
+        pdf.set_font('Arial', 'B', 8)
+        pdf.cell(5, 5, num, 1, 0, 'C')
+        pdf.set_font('Arial', '', 7)
+        pdf.cell(100, 5, preg, 1, 0, 'L')
+        pdf.cell(105, 5, '', 1, 0)
+        
+        dibujar_casilla(pdf, "SI", 120, y_curr+0.5, marcado=True)
+        dibujar_casilla(pdf, "NO", 135, y_curr+0.5)
 
-    # --- FIRMAS ---
-    pdf.cell(95, 5, 'Nombre de la persona que realiza la recepcion:', 0, 0)
-    pdf.cell(95, 5, 'Vo. Bo. Calidad:', 0, 1)
+        pdf.set_font('Arial', 'B', 8)
+        pdf.cell(20, 5, val_esp, 1, 0, 'C')
+        pdf.set_font('Arial', '', 7)
+        pdf.cell(47, 5, accion, 1, 1, 'C')
+
+    pdf.ln(5)
     
+    # ---------------- RESULTADO, OBSERVACIONES Y FIRMAS ----------------
     pdf.set_font('Arial', 'B', 8)
-    pdf.cell(95, 6, str(row.get('Responsable', '')), 0, 0)
-    pdf.cell(95, 6, f"Firmado digitalmente por: {supervisor}", 0, 1)
+    pdf.cell(277, 4, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
+    pdf.cell(277, 4, '** Para los casos que se realiza la revisión en el transporte y se determina que éste no cumple y que los insumos se ven DIRECTAMENTE AFECTADOS, SE PROCEDE A RECHAZARLOS.', 0, 1, 'L')
+    
+    pdf.ln(4)
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(70, 6, 'Nombre de la persona que realiza la recepción:', 0, 0)
+    pdf.set_font('Arial', '', 9)
+    pdf.cell(80, 6, str(row.get('Responsable', '')), 'B', 0, 'C')
+    pdf.cell(10, 6, '', 0, 0)
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(25, 6, 'Vo. Bo. Calidad:', 0, 0)
+    pdf.set_font('Arial', '', 9)
+    pdf.cell(80, 6, supervisor, 'B', 1, 'C')
 
     pdf.output(ruta_guardado)
 
@@ -286,7 +388,7 @@ with tab1:
 
       s1, s2, s3 = st.columns(3)
       with s1:
-        ingreso_sap = st.text_input("Fecha de Ingreso a SAP (Opcional)")
+        ingreso_sap = st.date_input("Fecha de Ingreso a SAP")
       with s2:
         doc_sap = st.text_input("No. Documento SAP (Opcional)")
       with s3:
@@ -332,7 +434,7 @@ with tab1:
             "FacturaGuia": factura_guia,
             "Transporte": proveedor_sel, 
             "Placa": placa_transporte,
-            "IngresoSAP": ingreso_sap,
+            "IngresoSAP": str(ingreso_sap),
             "DocSAP": doc_sap,
             "Marchamo": marchamo,
             "Lote": lote_proveedor,
@@ -445,13 +547,13 @@ with tab2:
           with col_btn1:
             with st.form(f"form_firma_{row['ID']}"):
               nombre_supervisor = st.text_input("Firma del Supervisor")
-              aprobar = st.form_submit_button("Aprobar y Generar R-ICC-14-1 🛡️", type="primary")
+              aprobar = st.form_submit_button("Aprobar y Generar R-ICC-14-1 Horizontal 🛡️", type="primary")
 
             if aprobar:
               if not nombre_supervisor:
                 st.error("Ingrese su firma.")
               else:
-                with st.spinner("Generando PDF Oficial R-ICC-14-1..."):
+                with st.spinner("Generando PDF Oficial R-ICC-14-1 (Landscape)..."):
                   carpeta_base = "./Registros_Oficiales"
                   subcarpeta_lote = f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(" ", "_")
                   ruta_destino = os.path.join(carpeta_base, str(row["Planta"]), str(row["TipoMaterial"]), str(row["NombreMaterial"]), subcarpeta_lote)
@@ -463,7 +565,7 @@ with tab2:
                   if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
                     shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
 
-                  # 2. Generar Checklist R ICC 14-1 en PDF desde cero
+                  # 2. Generar Checklist R ICC 14-1 Horizontal en PDF desde cero
                   ruta_checklist_final = os.path.join(ruta_destino, f"Checklist_RICC14-1_{row['LoteProveedor']}.pdf")
                   generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_final)
 
@@ -473,7 +575,7 @@ with tab2:
                   df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(ruta_cert_final)
                   guardar_pendientes(df_p)
 
-                  st.success("🎉 ¡Checklist PDF R-ICC-14-1 Generado y Aprobado!")
+                  st.success("🎉 ¡Checklist PDF Horizontal R-ICC-14-1 Generado!")
                   st.rerun()
 
           with col_btn2:
@@ -516,7 +618,7 @@ with tab3:
           if pd.notna(ruta_chk) and ruta_chk != "nan" and os.path.exists(ruta_chk):
             with open(ruta_chk, "rb") as f:
               st.download_button(
-                  label="📊 Descargar Checklist (PDF Oficial)",
+                  label="📊 Descargar Checklist (PDF Horizontal)",
                   data=f,
                   file_name=os.path.basename(ruta_chk),
                   mime="application/pdf",
