@@ -43,7 +43,6 @@ ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
 def cargar_pendientes():
   if os.path.exists(ARCHIVO_PENDIENTES):
     df = pd.read_csv(ARCHIVO_PENDIENTES)
-    # Asegurar que todas las columnas de texto existan y acepten strings
     columnas_texto = [
         "Planta",
         "TipoMaterial",
@@ -342,8 +341,7 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
-      " datos, firme y apruebe para generar la jerarquía de carpetas, el Excel"
-      " y el PDF."
+      " datos, firme y apruebe para completar su plantilla de Excel oficial."
   )
 
   clave_ingresada = st.text_input(
@@ -398,7 +396,7 @@ with tab2:
                 "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
             )
             aprobar = st.form_submit_button(
-                "Aprobar, Generar Excel Oficial, PDF y Guardar en Carpetas 🛡️",
+                "Aprobar y Completar Checklist Oficial de Excel 🛡️",
                 type="primary",
             )
 
@@ -409,7 +407,8 @@ with tab2:
               )
             else:
               with st.spinner(
-                  "Generando estructura de carpetas, PDF y Excel oficial..."
+                  "Completando plantilla de Excel oficial y generando"
+                  " certificado..."
               ):
                 carpeta_base = "./Registros_Oficiales"
                 subcarpeta_lote = (
@@ -479,13 +478,20 @@ with tab2:
                   else:
                     os.rename(row["RutaPdfCert"], ruta_cert_final)
 
-                # Generar Excel Oficial basado en la plantilla
+                # COMPLETAR TU PLANTILLA OFICIAL DE EXCEL
                 prefijo_archivo = (
                     f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
                     )
                 )
-                ruta_plantilla = "plantilla_checklist.xlsx"
+                
+                # Buscar dinámicamente cualquier archivo de plantilla Excel en el repositorio
+                plantillas_disponibles = [
+                    f for f in os.listdir('.') 
+                    if f.endswith('.xlsx') and f != "Maestro_Materiales_Proveedores (2).xlsx"
+                ]
+                
+                ruta_plantilla = plantillas_disponibles[0] if plantillas_disponibles else "plantilla_checklist.xlsx"
                 ruta_excel_final = os.path.join(
                     ruta_destino, f"{prefijo_archivo}.xlsx"
                 )
@@ -493,8 +499,40 @@ with tab2:
                 if os.path.exists(ruta_plantilla):
                   wb = openpyxl.load_workbook(ruta_plantilla)
                   ws = wb.active
+                  
+                  # Inyección inteligente de datos en tu plantilla oficial
+                  # (Ajustamos celdas comunes y también permitimos búsqueda inteligente de etiquetas si existen)
+                  datos_a_llenar = {
+                      "Planta": row["Planta"],
+                      "Tipo de Material": row["TipoMaterial"],
+                      "Material": row["NombreMaterial"],
+                      "Proveedor": row["Proveedor"],
+                      "Lote": row["LoteProveedor"],
+                      "Cantidad": row["Cantidad"],
+                      "Unidad": row["Unidad"],
+                      "Temperatura": row["Temperatura"],
+                      "Fecha de Producción": row["FechaProduccion"],
+                      "Fecha de Vencimiento": row["FechaVencimiento"],
+                      "Criticidad": row["Criticidad"],
+                      "Operador": row["Responsable"],
+                      "Supervisor": nombre_supervisor,
+                      "Fecha Aprobación": row["Fecha"]
+                  }
+                  
+                  # Buscar celdas por etiqueta o rellenar de forma segura en celdas clave
+                  for row_idx in range(1, min(ws.max_row + 1, 30)):
+                    for col_idx in range(1, min(ws.max_column + 1, 15)):
+                      cell_val = str(ws.cell(row=row_idx, column=col_idx).value).strip().lower()
+                      for k, v in datos_a_llenar.items():
+                        if k.lower() in cell_val:
+                          # Intentar colocar el valor en la celda contigua a la derecha
+                          next_cell = ws.cell(row=row_idx, column=col_idx + 1)
+                          if next_cell.value is None or str(next_cell.value).strip() == "":
+                            next_cell.value = v
+
                   wb.save(ruta_excel_final)
                 else:
+                  # Si no existe la plantilla, se crea un reporte estructurado
                   df_resp = pd.DataFrame([row])
                   df_resp.to_excel(ruta_excel_final, index=False)
 
@@ -515,8 +553,8 @@ with tab2:
                 guardar_pendientes(df_p)
 
                 st.success(
-                    "🎉 ¡Registro aprobado con éxito! Archivos generados y"
-                    f" guardados en: `{ruta_destino}`"
+                    "🎉 ¡Checklist de Excel completado y firmado con éxito! "
+                    f"Guardado en: `{ruta_destino}`"
                 )
                 st.rerun()
   elif clave_ingresada == "":
@@ -531,7 +569,7 @@ with tab3:
   st.header("🔍 Buscador y Consulta de Registros Oficiales")
   st.markdown(
       "Consulte el historial de recepciones aprobadas, descargue los"
-      " checklists en Excel y los certificados firmados."
+      " checklists en Excel completados y los certificados firmados."
   )
 
   df_p = cargar_pendientes()
@@ -590,7 +628,7 @@ with tab3:
       ):
         col_d1, col_d2 = st.columns(2)
 
-        # Botón para descargar el Excel oficial
+        # Botón para descargar el Excel oficial completado
         with col_d1:
           if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and str(row["RutaExcel"]).strip() != "" and os.path.exists(str(row["RutaExcel"])):
             with open(row["RutaExcel"], "rb") as f:
