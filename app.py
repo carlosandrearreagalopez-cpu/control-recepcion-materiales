@@ -18,7 +18,7 @@ except ImportError:
 try:
     from pypdf import PdfWriter
 except ImportError:
-    st.error("⚠️ Falta 'pypdf' en requirements.txt para unir los PDFs. Por favor agrégalo.")
+    st.error("⚠️ Falta 'pypdf' en requirements.txt para unir los PDFs.")
 
 # Configuración de diseño de página
 st.set_page_config(page_title="Control de Recepción y Calidad", page_icon="📦", layout="wide", initial_sidebar_state="expanded")
@@ -39,7 +39,7 @@ ARCHIVO_PENDIENTES = "registros_pendientes.csv"
 ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
 
 # ------------------------------------------
-# FUNCIONES DE DATOS
+# FUNCIONES DE DATOS Y FIRMAS
 # ------------------------------------------
 def cargar_pendientes():
   if os.path.exists(ARCHIVO_PENDIENTES):
@@ -72,23 +72,28 @@ def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
 def guardar_firma(canvas_result, prefix):
-    """Guarda la firma con fondo blanco puro para evitar cuadros negros en el PDF."""
-    if canvas_result is not None and canvas_result.image_data is not None and np.any(canvas_result.image_data):
-        os.makedirs("temp_firmas", exist_ok=True)
-        ruta_firma = f"temp_firmas/{prefix}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
-        
-        # Convertir RGBA (transparente) a RGB con fondo blanco
-        rgba_image = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-        background = Image.new('RGBA', rgba_image.size, (255, 255, 255, 255))
-        alpha_composite = Image.alpha_composite(background, rgba_image)
-        rgb_image = alpha_composite.convert('RGB')
-        
-        rgb_image.save(ruta_firma, "PNG")
-        return ruta_firma
+    """Guarda la firma extrayendo los datos de forma segura (blindado vs RuntimeError)."""
+    if canvas_result is not None:
+        try:
+            # El acceso a image_data debe estar dentro del try
+            data = canvas_result.image_data
+            if data is not None and np.any(data):
+                os.makedirs("temp_firmas", exist_ok=True)
+                ruta_firma = f"temp_firmas/{prefix}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
+                
+                rgba_image = Image.fromarray(data.astype('uint8'), 'RGBA')
+                background = Image.new('RGBA', rgba_image.size, (255, 255, 255, 255))
+                alpha_composite = Image.alpha_composite(background, rgba_image)
+                rgb_image = alpha_composite.convert('RGB')
+                
+                rgb_image.save(ruta_firma, "PNG")
+                return ruta_firma
+        except Exception:
+            pass
     return ""
 
 def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
-    """Une el Checklist y el Certificado en un solo PDF"""
+    """Une Checklist y Certificado con pypdf."""
     try:
         from pypdf import PdfWriter
         merger = PdfWriter()
@@ -97,7 +102,7 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
         if ruta_certificado and os.path.exists(ruta_certificado):
             if ruta_certificado.lower().endswith(('.png', '.jpg', '.jpeg')):
                 img = Image.open(ruta_certificado).convert('RGB')
-                ruta_temp_pdf = ruta_certificado + ".pdf"
+                ruta_temp_pdf = ruta_certificado + "_temp.pdf"
                 img.save(ruta_temp_pdf, "PDF", resolution=100.0)
                 merger.append(ruta_temp_pdf)
                 merger.write(ruta_final)
@@ -110,50 +115,59 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
         else:
             merger.write(ruta_final)
             merger.close()
-    except Exception as e:
+    except Exception:
         shutil.copy(ruta_checklist, ruta_final)
 
 # ------------------------------------------
-# GENERADOR PDF (DISEÑO MILIMÉTRICO)
+# MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
 # ------------------------------------------
-def dibujar_casilla(pdf, x, y, label, checked=False):
-    pdf.set_xy(x, y)
-    pdf.set_font('Arial', '', 7)
-    pdf.cell(5, 3.5, label, 0, 0, 'R')
-    pdf.rect(x + 6, y + 0.5, 3, 3)
-    if checked:
-        pdf.set_xy(x + 6, y + 0.5)
-        pdf.set_font('Arial', 'B', 7)
-        pdf.cell(3, 3, 'X', 0, 0, 'C')
+def dibujar_opciones(pdf, x_start, y, h_row, opts, idx_checked):
+    """Dibuja un conjunto de casillas SI/NO/N/A alineadas."""
+    curr_x = x_start
+    for i, opt in enumerate(opts):
+        pdf.set_xy(curr_x, y)
+        pdf.set_font('Arial', '', 7)
+        pdf.cell(7, h_row, opt, 0, 0, 'R')
+        # Dibujar cajita
+        box_x = curr_x + 8
+        box_y = y + (h_row - 3) / 2
+        pdf.rect(box_x, box_y, 3, 3)
+        if i == idx_checked:
+            pdf.set_xy(box_x, box_y)
+            pdf.set_font('Arial', 'B', 7)
+            pdf.cell(3, 3, 'X', 0, 0, 'C')
+        curr_x += 16
 
 def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
+    # Hoja A4 Horizontal = 297mm ancho útil 277mm (10mm de margen)
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     pdf.set_auto_page_break(auto=False)
     pdf.set_fill_color(220, 230, 241) 
     
+    h_row = 4.5 # Altura estándar ajustada
+    
     # --- ENCABEZADO ---
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(35, 4, 'Código:', 'LT', 0, 'R')
+    pdf.cell(35, h_row, 'Código:', 'LT', 0, 'R')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(35, 4, 'R ICC - 14-1', 'TR', 0, 'C')
+    pdf.cell(35, h_row, 'R ICC - 14-1', 'TR', 0, 'C')
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(167, 4, 'Aseguramiento de Calidad', 'LTR', 0, 'C')
+    pdf.cell(167, h_row, 'Aseguramiento de Calidad', 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(40, 4, 'Vigente a partir de:', 'LTR', 1, 'C')
+    pdf.cell(40, h_row, 'Vigente a partir de:', 'LTR', 1, 'C')
     
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(35, 4, 'Versión:', 'LB', 0, 'R')
+    pdf.cell(35, h_row, 'Versión:', 'LB', 0, 'R')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(35, 4, '5', 'BR', 0, 'C')
+    pdf.cell(35, h_row, '5', 'BR', 0, 'C')
     pdf.set_font('Arial', 'B', 9)
-    pdf.cell(167, 4, 'Check list de recepción de materiales', 'LBR', 0, 'C')
+    pdf.cell(167, h_row, 'Check list de recepción de materiales', 'LBR', 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(40, 4, 'feb-23', 'LBR', 1, 'C')
-    pdf.ln(1.5)
+    pdf.cell(40, h_row, 'feb-23', 'LBR', 1, 'C')
+    pdf.ln(1)
 
     # --- DATOS GENERALES ---
-    h_row = 4.2 # Altura ajustada para que quepa en 1 sola página
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(35, h_row, 'Fecha de recepción:', 1, 0, 'R')
     pdf.set_font('Arial', '', 7)
@@ -183,54 +197,54 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(67, h_row, 'Número de documento SAP:', 1, 0, 'R')
     pdf.set_font('Arial', '', 7)
     pdf.cell(100, h_row, str(row.get('DocSAP', '')), 1, 1, 'C')
-    pdf.ln(1.5)
+    pdf.ln(2)
 
     # --- MARCHAMO Y CANDADO ---
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(100, h_row, 'Inspección del Marchamo', 0, 0, 'L', fill=True)
     pdf.cell(5, h_row, '', 0, 0)
-    pdf.cell(95, h_row, 'Inspección del Candado', 0, 0, 'L', fill=True)
+    pdf.cell(85, h_row, 'Inspección del Candado', 0, 0, 'L', fill=True)
     pdf.cell(30, h_row, 'Valor esperado', 0, 0, 'C')
-    pdf.cell(47, h_row, 'Acción en caso desviación', 0, 1, 'C')
+    pdf.cell(57, h_row, 'Acción en caso desviación', 0, 1, 'C')
 
     y_start = pdf.get_y()
-    pdf.rect(10, y_start, 100, 9)
-    pdf.rect(115, y_start, 95, 9)
-    pdf.rect(210, y_start, 30, 9)
-    pdf.rect(240, y_start, 47, 9)
+    pdf.rect(10, y_start, 100, h_row*2)
+    pdf.rect(115, y_start, 85, h_row*2)
+    pdf.rect(200, y_start, 30, h_row*2)
+    pdf.rect(230, y_start, 57, h_row*2)
 
-    pdf.set_xy(10, y_start + 1.5)
-    pdf.cell(5, 4, '1', 0, 0, 'C')
-    pdf.cell(50, 4, '¿El marchamo se encuentra alterado?', 0, 0)
-    est_mar = str(row.get('EstadoMarchamo', 'N/A'))
-    dibujar_casilla(pdf, 65, y_start + 1.5, "SI", checked=(est_mar=="SI"))
-    dibujar_casilla(pdf, 78, y_start + 1.5, "NO", checked=(est_mar=="NO"))
-    dibujar_casilla(pdf, 91, y_start + 1.5, "N/A", checked=(est_mar=="N/A"))
+    pdf.set_xy(10, y_start)
+    pdf.cell(5, h_row, '1', 0, 0, 'C')
+    pdf.cell(45, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
     
-    pdf.set_xy(15, y_start + 5)
-    pdf.cell(25, 4, 'No. de marchamo:', 0, 0)
-    pdf.cell(55, 4, str(row.get('Marchamo', '')), 'B', 0, 'C')
+    # Casillas de marchamo
+    est_mar = str(row.get('EstadoMarchamo', 'N/A'))
+    idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
+    dibujar_opciones(pdf, 60, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
 
-    pdf.set_xy(115, y_start + 2.5)
-    pdf.cell(5, 4, '2', 0, 0, 'C')
-    pdf.cell(45, 4, '¿El candado se encuentra alterado?', 0, 0)
+    pdf.set_xy(15, y_start + h_row)
+    pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
+    pdf.cell(55, h_row, str(row.get('Marchamo', '')), 'B', 0, 'C')
+
+    pdf.set_xy(115, y_start + h_row/2)
+    pdf.cell(5, h_row, '2', 0, 0, 'C')
+    pdf.cell(40, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
-    dibujar_casilla(pdf, 165, y_start + 2.5, "SI", checked=(est_can=="SI"))
-    dibujar_casilla(pdf, 178, y_start + 2.5, "NO", checked=(est_can=="NO"))
-    dibujar_casilla(pdf, 191, y_start + 2.5, "N/A", checked=(est_can=="N/A"))
+    idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
+    dibujar_opciones(pdf, 160, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
 
-    pdf.set_xy(210, y_start + 2.5)
+    pdf.set_xy(200, y_start + h_row/2)
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(30, 4, 'NO', 0, 0, 'C')
-    pdf.set_font('Arial', '', 6)
-    pdf.cell(47, 4, 'Retener lote y emitir reclamo.', 0, 1, 'C')
-    pdf.ln(3)
+    pdf.cell(30, h_row, 'NO', 0, 0, 'C')
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(57, h_row, 'Retener lote y emitir reclamo.', 0, 1, 'C')
+    pdf.ln(h_row/2 + 2)
 
     # --- MATERIAL ---
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(200, h_row, 'Inspección del Material', 0, 0, 'L', fill=True)
+    pdf.cell(190, h_row, 'Inspección del Material', 0, 0, 'L', fill=True)
     pdf.cell(30, h_row, 'Valor esperado', 0, 0, 'C', fill=True)
-    pdf.cell(47, h_row, 'Acción en caso desviación', 0, 1, 'C', fill=True)
+    pdf.cell(57, h_row, 'Acción en caso desviación', 0, 1, 'C', fill=True)
 
     datos_mat = [
         ("Proveedor:", str(row.get('Proveedor', ''))),
@@ -246,10 +260,10 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.set_font('Arial', 'B', 7)
         pdf.cell(35, h_row, etiqueta, 1, 0, 'R')
         pdf.set_font('Arial', '', 7)
-        pdf.cell(165, h_row, valor, 1, 0, 'C')
+        pdf.cell(155, h_row, valor, 1, 0, 'C')
         pdf.set_fill_color(200, 200, 200)
         pdf.cell(30, h_row, '------', 1, 0, 'C', fill=True)
-        pdf.cell(47, h_row, '------', 1, 1, 'C', fill=True)
+        pdf.cell(57, h_row, '------', 1, 1, 'C', fill=True)
 
     pdf.set_fill_color(220, 230, 241)
     preguntas_mat = [
@@ -267,38 +281,34 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     for num, preg, opts, val_esp, accion in preguntas_mat:
         y_curr = pdf.get_y()
         pdf.set_font('Arial', 'B', 7)
-        pdf.cell(6, h_row, num, 1, 0, 'C')
+        pdf.cell(5, h_row, num, 1, 0, 'C')
         pdf.set_font('Arial', '', 7)
-        pdf.cell(114, h_row, preg, 1, 0, 'L')
-        pdf.cell(80, h_row, '', 1, 0)
+        pdf.cell(130, h_row, preg, 1, 0, 'L')
+        pdf.cell(55, h_row, '', 1, 0)
         
-        x_base = 135
+        idx_chk = 0 # Default SI
         if num == "4":
-            dibujar_casilla(pdf, x_base, y_curr+(h_row-3)/2, opts[0], checked=(criticidad=="I"))
-            dibujar_casilla(pdf, x_base+20, y_curr+(h_row-3)/2, opts[1], checked=(criticidad=="II"))
-            dibujar_casilla(pdf, x_base+40, y_curr+(h_row-3)/2, opts[2], checked=(criticidad=="III"))
-        else:
-            dibujar_casilla(pdf, x_base, y_curr+(h_row-3)/2, opts[0], checked=True)
-            dibujar_casilla(pdf, x_base+20, y_curr+(h_row-3)/2, opts[1])
-            dibujar_casilla(pdf, x_base+40, y_curr+(h_row-3)/2, opts[2])
+            idx_chk = 0 if criticidad=="I" else (1 if criticidad=="II" else 2)
+            
+        dibujar_opciones(pdf, 140, y_curr, h_row, opts, idx_chk)
 
         pdf.set_font('Arial', 'B', 7)
         if val_esp == "------":
             pdf.set_fill_color(200, 200, 200)
             pdf.cell(30, h_row, val_esp, 1, 0, 'C', fill=True)
-            pdf.cell(47, h_row, accion, 1, 1, 'C', fill=True)
+            pdf.cell(57, h_row, accion, 1, 1, 'C', fill=True)
             pdf.set_fill_color(220, 230, 241)
         else:
             pdf.cell(30, h_row, val_esp, 1, 0, 'C')
-            pdf.set_font('Arial', '', 6)
-            pdf.cell(47, h_row, accion, 1, 1, 'C')
+            pdf.set_font('Arial', '', 7)
+            pdf.cell(57, h_row, accion, 1, 1, 'C')
 
     pdf.ln(1)
 
     # --- TRANSPORTE ---
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(200, h_row, 'Inspección del Transporte', 0, 0, 'L', fill=True)
-    pdf.cell(77, h_row, '', 0, 1)
+    pdf.cell(190, h_row, 'Inspección del Transporte', 0, 0, 'L', fill=True)
+    pdf.cell(87, h_row, '', 0, 1)
 
     preguntas_trans = [
         ("10", "¿Se encuentra el transporte libre de plagas?", "SI", "Rechazar lote y emitir reclamo"),
@@ -310,95 +320,90 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     for num, preg, val_esp, accion in preguntas_trans:
         y_curr = pdf.get_y()
         pdf.set_font('Arial', 'B', 7)
-        pdf.cell(6, h_row, num, 1, 0, 'C')
+        pdf.cell(5, h_row, num, 1, 0, 'C')
         pdf.set_font('Arial', '', 7)
-        pdf.cell(114, h_row, preg, 1, 0, 'L')
-        pdf.cell(80, h_row, '', 1, 0)
+        pdf.cell(130, h_row, preg, 1, 0, 'L')
+        pdf.cell(55, h_row, '', 1, 0)
         
-        dibujar_casilla(pdf, 135, y_curr+(h_row-3)/2, "SI", checked=True)
-        dibujar_casilla(pdf, 155, y_curr+(h_row-3)/2, "NO")
+        dibujar_opciones(pdf, 140, y_curr, h_row, ["SI", "NO"], 0) # SI premarcado
 
         pdf.set_font('Arial', 'B', 7)
         pdf.cell(30, h_row, val_esp, 1, 0, 'C')
-        pdf.set_font('Arial', '', 6)
-        pdf.cell(47, h_row, accion, 1, 1, 'C')
+        pdf.set_font('Arial', '', 7)
+        pdf.cell(57, h_row, accion, 1, 1, 'C')
         
-    # --- TEMPERATURAS (Transporte y Material) CORREGIDO ---
+    # --- TEMPERATURAS ---
     temp_trans = str(row.get('TempTransporte', 'N/A'))
     temp_mat = str(row.get('TempMaterial', 'N/A'))
     
     y_curr = pdf.get_y()
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(6, h_row, '14', 'LTR', 0, 'C')
+    pdf.cell(5, h_row, '14', 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(114, h_row, '¿El transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
-    pdf.cell(80, h_row, '', 'LTR', 0)
-    dibujar_casilla(pdf, 135, y_curr+(h_row-3)/2, "SI", checked=(temp_trans != "N/A" or temp_mat != "N/A"))
-    dibujar_casilla(pdf, 155, y_curr+(h_row-3)/2, "NO")
-    dibujar_casilla(pdf, 175, y_curr+(h_row-3)/2, "N/A", checked=(temp_trans == "N/A" and temp_mat == "N/A"))
+    pdf.cell(130, h_row, '¿El transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
+    pdf.cell(55, h_row, '', 'LTR', 0)
+    
+    idx_temp = 2 if (temp_trans == "N/A" and temp_mat == "N/A") else 0
+    dibujar_opciones(pdf, 140, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
     
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(30, h_row, "SI", 'LTR', 0, 'C')
-    pdf.set_font('Arial', '', 6)
-    pdf.cell(47, h_row, "Rechazar lote", 'LTR', 1, 'C')
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(57, h_row, "Rechazar lote", 'LTR', 1, 'C')
 
-    pdf.cell(6, h_row, '', 'LBR', 0)
+    # Fila combinada de temperaturas (alineada con el diseño)
+    pdf.cell(5, h_row, '', 'LBR', 0)
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(114, h_row, f"    Temperatura Transporte (°C): {temp_trans}", 'LBR', 0, 'L')
-    pdf.cell(80, h_row, f"    Temperatura del Material (°C): {temp_mat}", 'LBR', 0, 'L')
+    pdf.cell(130, h_row, f"    Temperatura Transporte (°C): {temp_trans}           Temperatura del Material (°C): {temp_mat}", 'LBR', 0, 'L')
+    pdf.cell(55, h_row, '', 'LBR', 0)
     pdf.cell(30, h_row, '', 'LBR', 0)
-    pdf.cell(47, h_row, '', 'LBR', 1)
+    pdf.cell(57, h_row, '', 'LBR', 1)
 
     # Pregunta 15
     y_curr = pdf.get_y()
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(6, h_row, '15', 1, 0, 'C')
+    pdf.cell(5, h_row, '15', 1, 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(114, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
-    pdf.cell(80, h_row, '', 1, 0)
-    dibujar_casilla(pdf, 135, y_curr+(h_row-3)/2, "SI", checked=True)
-    dibujar_casilla(pdf, 155, y_curr+(h_row-3)/2, "NO")
+    pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
+    pdf.cell(55, h_row, '', 1, 0)
+    dibujar_opciones(pdf, 140, y_curr, h_row, ["SI", "NO"], 0)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(30, h_row, "SI", 1, 0, 'C')
-    pdf.set_font('Arial', '', 6)
-    pdf.cell(47, h_row, "Rechazar lote", 1, 1, 'C')
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(57, h_row, "Rechazar lote", 1, 1, 'C')
 
     pdf.ln(2)
     
     # --- RESULTADO, OBSERVACIONES Y FIRMAS ---
     y_curr = pdf.get_y()
-    pdf.rect(10, y_curr, 277, 7)
-    pdf.set_xy(10, y_curr+1.5)
+    pdf.rect(10, y_curr, 277, 8)
+    pdf.set_xy(10, y_curr+2)
     pdf.set_font('Arial', 'B', 9)
-    pdf.cell(60, 4, 'Resultado final:', 0, 0, 'R')
-    dibujar_casilla(pdf, 80, y_curr+1.5, "", checked=True)
-    pdf.set_xy(92, y_curr+1.5)
-    pdf.cell(30, 4, 'Aprobado', 0, 0, 'L')
-    dibujar_casilla(pdf, 130, y_curr+1.5, "", checked=False)
-    pdf.set_xy(142, y_curr+1.5)
-    pdf.cell(30, 4, 'Desaprobado', 0, 1, 'L')
+    pdf.cell(70, 4, 'Resultado final:', 0, 0, 'R')
+    dibujar_opciones(pdf, 85, y_curr+2, 4, ["Aprobado", "Desaprobado"], 0)
     
-    pdf.ln(3)
-    pdf.set_font('Arial', 'B', 6.5)
+    pdf.ln(6)
+    pdf.set_font('Arial', 'B', 7)
     pdf.cell(277, 3, 'OBSERVACIONES:', 0, 1, 'L')
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # Inserción de FIRMAS (Aseguradas en la misma página)
     y_firmas = pdf.get_y() + 2
+
+    # Inserción de imágenes de firma
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
-            pdf.image(ruta_firma_op, x=45, y=y_firmas, w=35, h=12)
-        except: pass
+            pdf.image(ruta_firma_op, x=60, y=y_firmas, w=35, h=10)
+        except Exception: pass
         
     ruta_firma_sup = str(row.get('RutaFirmaSup', ''))
     if ruta_firma_sup and os.path.exists(ruta_firma_sup):
         try:
-            pdf.image(ruta_firma_sup, x=175, y=y_firmas, w=35, h=12)
-        except: pass
+            pdf.image(ruta_firma_sup, x=180, y=y_firmas, w=35, h=10)
+        except Exception: pass
 
-    pdf.set_xy(10, y_firmas + 12)
+    pdf.set_xy(10, y_firmas + 10)
     pdf.set_font('Arial', 'B', 8)
     pdf.cell(60, 4, 'Nombre de la persona que realiza la recepción:', 0, 0)
     pdf.set_font('Arial', '', 8)
@@ -655,15 +660,15 @@ with tab2:
                   row['RutaFirmaSup'] = ruta_firma_sup
 
                   ext_cert = os.path.splitext(str(row["RutaPdfCert"]))[1] if row["RutaPdfCert"] else ".pdf"
-                  ruta_cert_final = os.path.join(ruta_destino, f"Certificado_Original_{row['LoteProveedor']}{ext_cert}")
+                  ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{row['LoteProveedor']}{ext_cert}")
                   if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
                     shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
 
-                  # 1. Generar Checklist Base
+                  # 1. Generar Checklist
                   ruta_checklist_temp = os.path.join(ruta_destino, f"TEMP_Checklist_{row['LoteProveedor']}.pdf")
                   generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_temp)
 
-                  # 2. Unificar (Checklist + Certificado)
+                  # 2. Unificar
                   ruta_unificada = os.path.join(ruta_destino, f"Registro_Auditoria_{row['LoteProveedor']}.pdf")
                   generar_documento_unificado(ruta_checklist_temp, ruta_cert_final, ruta_unificada)
                   
@@ -723,7 +728,7 @@ with tab3:
         with col_d1:
           if pd.notna(ruta_chk) and ruta_chk != "nan" and os.path.exists(ruta_chk):
             with open(ruta_chk, "rb") as f:
-              st.download_button("📊 Descargar PDF Unificado", data=f, file_name=os.path.basename(ruta_chk), mime="application/pdf", key=f"dl_chk_{row['ID']}")
+              st.download_button("📊 Descargar PDF Maestro Unificado", data=f, file_name=os.path.basename(ruta_chk), mime="application/pdf", key=f"dl_chk_{row['ID']}")
         
         ruta_cert = str(row.get("RutaPdfCert", ""))
         with col_d2:
