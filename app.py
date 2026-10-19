@@ -132,7 +132,7 @@ def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
             pdf.cell(3, 3, 'X', 0, 0, 'C')
-        curr_x += 15
+        curr_x += 16
 
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
     """Función centrada y uniforme para las preguntas principales de la tabla."""
@@ -243,7 +243,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
     pdf.cell(55, h_row, str(row.get('Marchamo', '')), 'B', 0, 'C')
 
-    # Candado (Pregunta 2) - Ajustado x_start a 155 para que N/A entre perfectamente
+    # Candado (Pregunta 2)
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
     pdf.cell(42, h_row, '¿El candado se encuentra alterado?', 0, 0)
@@ -418,7 +418,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS ---
+    # --- ESPACIO DE FIRMAS CORREGIDO ---
     pdf.ln(12) 
     y_linea1 = pdf.get_y()
 
@@ -426,6 +426,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.line(55, y_linea1, 135, y_linea1)
     pdf.line(175, y_linea1, 255, y_linea1)
 
+    # Nombre del operador y supervisor sobre la línea 1
     pdf.set_xy(55, y_linea1 - 4)
     pdf.set_font('Arial', '', 8)
     pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
@@ -433,12 +434,13 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(175, y_linea1 - 4)
     pdf.cell(80, 4, supervisor, 0, 0, 'C')
 
-    # Ajustado: Etiqueta movida a x=5 para que no se corte y se lea completa
-    pdf.set_xy(5, y_linea1 - 1)
-    pdf.set_font('Arial', 'B', 7)
-    pdf.cell(48, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
+    # Etiqueta de la persona que realiza la recepción (Tamaño ajustado a 6.5 pt y x=10 para que no se corte)
+    pdf.set_xy(10, y_linea1 - 0.5)
+    pdf.set_font('Arial', 'B', 6.5)
+    pdf.cell(43, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
     
-    pdf.set_xy(145, y_linea1 - 1)
+    # Etiqueta Vo. Bo. Calidad
+    pdf.set_xy(145, y_linea1 - 0.5)
     pdf.set_font('Arial', 'B', 8)
     pdf.cell(28, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
 
@@ -448,11 +450,13 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.line(175, y_linea2, 255, y_linea2)
 
     pdf.set_xy(35, y_linea2 - 1)
+    pdf.set_font('Arial', 'B', 8)
     pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
     
     pdf.set_xy(155, y_linea2 - 1)
     pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
 
+    # Inserción de imágenes de firma sobre la segunda línea
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
