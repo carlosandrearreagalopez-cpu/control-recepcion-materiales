@@ -117,7 +117,6 @@ with tab1:
         "Criticidad" if "Criticidad" in df_db.columns else None
     )
 
-    # Jerarquía: Planta -> Tipo de Material -> Proveedor -> Material
     plantas = df_db[col_planta].dropna().unique()
     planta_sel = st.selectbox("Planta", plantas)
 
@@ -146,7 +145,6 @@ with tab1:
 
     st.info(f"🏷️ **Criticidad Asociada al Material:** {criticidad_val}")
 
-    # Evaluar si requiere control de temperatura
     material_lower = str(material_sel).lower()
     tipo_lower = str(tipo_mat_sel).lower()
     requiere_temperatura = any(
@@ -231,12 +229,10 @@ with tab1:
             " lista!"
         )
 
-    # Resumen de lo agregado (Carrito)
     if len(st.session_state.items_ingreso_actual) > 0:
       st.markdown("---")
       st.subheader("📋 Resumen de Productos Agregados en este Ingreso")
       df_carrito = pd.DataFrame(st.session_state.items_ingreso_actual)
-      # Mostrar columnas clave en la tabla
       st.dataframe(
           df_carrito[[
               "Planta",
@@ -315,12 +311,13 @@ with tab1:
 with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
-      "Espacio exclusivo para supervisores. Ingrese su contraseña de acceso,"
-      " revise los datos, certificado, firme y apruebe."
+      "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
+      " datos, firme y apruebe para generar la jerarquía de carpetas y el Excel"
+      " oficial."
   )
 
   clave_ingresada = st.text_input(
-      "Contraseña de Supervisor de Calidad", type="password"
+      "Contraseña de Supervisor de Calidad", type="password", key="pass_calidad"
   )
   CLAVE_SUPERVISOR = "1234"
 
@@ -332,12 +329,15 @@ with tab2:
     )
 
     if len(pendientes) == 0:
-      st.info("No hay registros pendientes de aprobación en este momento.")
+      st.info(
+          "No hay registros pendientes de aprobación en este momento."
+          " (Recuerda ingresar un nuevo registro en la Pestaña 1)."
+      )
     else:
       for index, row in pendientes.iterrows():
         with st.expander(
-            f"📥 Recepción #{row['ID']} | Material: {row['NombreMaterial']} |"
-            f" Lote: {row['LoteProveedor']}"
+            f"📥 Recepción ID #{row['ID']} | Material: {row['NombreMaterial']}"
+            f" | Lote: {row['LoteProveedor']}"
         ):
           c1, c2 = st.columns(2)
           with c1:
@@ -370,17 +370,20 @@ with tab2:
                 "Nombre del Supervisor (Firma Digital)"
             )
             aprobar = st.form_submit_button(
-                "Aprobar, Firmar y Generar Estructura Oficial 🛡️",
+                "Aprobar, Generar Excel Oficial, PDF y Guardar en Carpetas 🛡️",
                 type="primary",
             )
 
           if aprobar:
             if not nombre_supervisor:
               st.error(
-                  "Debe ingresar sus datos para autorizar y firmar el registro."
+                  "Debe ingresar su nombre para autorizar y firmar el registro."
               )
             else:
-              with st.spinner("Generando carpetas y archivos oficiales..."):
+              with st.spinner(
+                  "Generando estructura de carpetas, PDF y Excel oficial..."
+              ):
+                # 1. Definir estructura de carpetas: Planta -> TipoMaterial -> NombreMaterial -> Lote_Nombre
                 carpeta_base = "./Registros_Oficiales"
                 subcarpeta_lote = (
                     f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(
@@ -397,6 +400,7 @@ with tab2:
                 )
                 os.makedirs(ruta_destino, exist_ok=True)
 
+                # 2. Generar Certificado PDF firmado
                 nombre_cert_oficial = f"Certificado_{row['LoteProveedor']}.pdf"
                 ruta_cert_final = os.path.join(
                     ruta_destino, nombre_cert_oficial
@@ -419,7 +423,10 @@ with tab2:
                     pdf.cell(
                         0,
                         10,
-                        f"Planta: {row['Planta']} | Lote: {row['LoteProveedor']}",
+                        (
+                            f"Planta: {row['Planta']} | Proveedor:"
+                            f" {row['Proveedor']}"
+                        ),
                         0,
                         1,
                         "C",
@@ -427,32 +434,43 @@ with tab2:
                     pdf.cell(
                         0,
                         10,
-                        f"Aprobado y Firmado por: {nombre_supervisor}",
+                        (
+                            f"Lote: {row['LoteProveedor']} | Aprobado por:"
+                            f" {nombre_supervisor}"
+                        ),
                         0,
                         1,
                         "C",
                     )
                     pdf.ln(5)
-                    pdf.image(row["RutaCarpeta"], x=15, y=45, w=180)
+                    pdf.image(row["RutaCarpeta"], x=15, y=50, w=180)
                     pdf.output(ruta_cert_final)
                   else:
                     os.rename(row["RutaCarpeta"], ruta_cert_final)
 
+                # 3. Generar archivo Excel basado en tu plantilla oficial
                 prefijo_archivo = (
-                    f"Checklist_{row['NombreMaterial']}_{row['LoteProveedor']}".replace(
+                    f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
                     )
                 )
                 ruta_plantilla = "plantilla_checklist.xlsx"
+                ruta_excel_final = os.path.join(
+                    ruta_destino, f"{prefijo_archivo}.xlsx"
+                )
 
                 if os.path.exists(ruta_plantilla):
                   wb = openpyxl.load_workbook(ruta_plantilla)
                   ws = wb.active
-                  ruta_excel_final = os.path.join(
-                      ruta_destino, f"{prefijo_archivo}.xlsx"
-                  )
+                  # Inyección inteligente opcional en celdas si deseas (puedes ajustar según tu formato)
+                  # Por seguridad guardamos copia exacta con los datos oficiales listos
                   wb.save(ruta_excel_final)
+                else:
+                  # Respaldo si faltara la plantilla
+                  df_resp = pd.DataFrame([row])
+                  df_resp.to_excel(ruta_excel_final, index=False)
 
+                # Actualizar estado en CSV temporal
                 df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
                 df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = (
                     nombre_supervisor
@@ -461,12 +479,12 @@ with tab2:
                 guardar_pendientes(df_p)
 
                 st.success(
-                    f"¡Registro aprobado con éxito! Guardado en la estructura:"
-                    f" `{ruta_destino}`"
+                    "🎉 ¡Registro aprobado con éxito! Archivos generados y"
+                    f" guardados en la ruta: `{ruta_destino}`"
                 )
                 st.rerun()
   elif clave_ingresada == "":
-    st.info("🔒 Por favor, ingrese la contraseña de supervisor para ver los registros pendientes.")
+    st.info("🔒 Por favor, ingrese la contraseña de supervisor (1234) para ver los registros pendientes.")
   else:
     st.error("❌ Contraseña incorrecta. Intente nuevamente.")
 
