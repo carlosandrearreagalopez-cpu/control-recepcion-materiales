@@ -118,8 +118,24 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # ------------------------------------------
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
 # ------------------------------------------
+def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
+    """Distribución limpia y exacta para los bloques superiores de Marchamo y Candado."""
+    curr_x = x_start
+    for i, opt in enumerate(opts):
+        pdf.set_font('Arial', '', 7)
+        pdf.set_xy(curr_x, y)
+        pdf.cell(7, h_row, opt, 0, 0, 'R')
+        box_x = curr_x + 8.5
+        box_y = y + (h_row - 3) / 2
+        pdf.rect(box_x, box_y, 3, 3)
+        if i == idx_checked:
+            pdf.set_xy(box_x, box_y)
+            pdf.set_font('Arial', 'B', 7)
+            pdf.cell(3, 3, 'X', 0, 0, 'C')
+        curr_x += 16
+
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
-    """Dibuja opciones distribuidas uniformemente y alineadas en el bloque de 55mm."""
+    """Función centrada y uniforme para las preguntas principales de la tabla."""
     n = len(opts)
     ancho_total = 55.0
     espacio_item = ancho_total / n
@@ -127,8 +143,6 @@ def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
         sub_x = x_start + (i * espacio_item)
         pdf.set_font('Arial', '', 7)
         w_texto = pdf.get_string_width(opt)
-        
-        # Centrar etiqueta y caja proporcionalmente dentro de su espacio asignado
         text_x = sub_x + (espacio_item - (w_texto + 4.5)) / 2
         pdf.set_xy(text_x, y)
         pdf.cell(w_texto, h_row, opt, 0, 0, 'L')
@@ -216,26 +230,26 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo (Pregunta 1)
+    # Marchamo (Pregunta 1) - Posición exacta dentro del cuadro de 100mm
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
-    pdf.cell(40, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
+    pdf.cell(42, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
     
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
-    dibujar_opciones_bloque(pdf, 50, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
+    dibujar_opciones_cabecera(pdf, 54, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
 
     pdf.set_xy(15, y_start + h_row)
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
     pdf.cell(55, h_row, str(row.get('Marchamo', '')), 'B', 0, 'C')
 
-    # Candado (Pregunta 2)
+    # Candado (Pregunta 2) - Posición exacta dentro del cuadro de 85mm
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
-    pdf.cell(40, h_row, '¿El candado se encuentra alterado?', 0, 0)
+    pdf.cell(42, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
     idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
-    dibujar_opciones_bloque(pdf, 158, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
+    dibujar_opciones_cabecera(pdf, 159, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
 
     pdf.set_xy(200, y_start + h_row/2)
     pdf.set_font('Arial', 'B', 7)
