@@ -49,6 +49,9 @@ def cargar_pendientes():
         "NombreMaterial",
         "Proveedor",
         "LoteProveedor",
+        "FacturaGuia",
+        "Transporte",
+        "Placa",
         "Unidad",
         "Temperatura",
         "FechaProduccion",
@@ -76,6 +79,9 @@ def cargar_pendientes():
         "NombreMaterial",
         "Proveedor",
         "LoteProveedor",
+        "FacturaGuia",
+        "Transporte",
+        "Placa",
         "Cantidad",
         "Unidad",
         "Temperatura",
@@ -131,8 +137,8 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
   st.header("Formulario de Recepción de Materiales")
   st.markdown(
-      "Selecciona la planta, el tipo de material, el proveedor y agrega los"
-      " productos junto con su certificado."
+      "Complete los datos de transporte, factura, lote y seleccione los"
+      " productos adjuntando su certificado."
   )
 
   if df_db is not None:
@@ -180,7 +186,21 @@ with tab1:
     )
 
     with st.form("form_item_recepcion"):
-      st.subheader("2. Datos del Lote, Cantidades y Certificado")
+      st.subheader("2. Datos de Transporte, Factura y Lote")
+      t1, t2, t3 = st.columns(3)
+      with t1:
+        factura_guia = st.text_input(
+            "No. de Factura y/o Guía", placeholder="Ej. FAC-12345"
+        )
+      with t2:
+        nombre_transporte = st.text_input(
+            "Nombre del Transporte", placeholder="Ej. Transportes S.A."
+        )
+      with t3:
+        placa_transporte = st.text_input(
+            "Placa del Transporte", placeholder="Ej. C-123ABC"
+        )
+
       c3, c4, c5 = st.columns(3)
       with c3:
         lote_proveedor = st.text_input(
@@ -221,8 +241,10 @@ with tab1:
       )
 
     if agregar_item:
-      if not lote_proveedor:
-        st.warning("⚠️ Debes ingresar el número de lote del proveedor.")
+      if not lote_proveedor or not factura_guia:
+        st.warning(
+            "⚠️ Debes ingresar el número de factura/guía y el número de lote."
+        )
       elif certificado_file is None:
         st.warning(
             "⚠️ Es obligatorio adjuntar la foto o PDF del certificado para este"
@@ -241,6 +263,9 @@ with tab1:
             "TipoMaterial": tipo_mat_sel,
             "Proveedor": proveedor_sel,
             "NombreMaterial": material_sel,
+            "FacturaGuia": factura_guia,
+            "Transporte": nombre_transporte,
+            "Placa": placa_transporte,
             "Lote": lote_proveedor,
             "Cantidad": cantidad,
             "Unidad": unidad,
@@ -265,10 +290,10 @@ with tab1:
               "Planta",
               "Proveedor",
               "NombreMaterial",
+              "FacturaGuia",
               "Lote",
               "Cantidad",
               "Unidad",
-              "Criticidad",
           ]],
           use_container_width=True,
       )
@@ -301,6 +326,9 @@ with tab1:
                 "TipoMaterial": str(item["TipoMaterial"]),
                 "NombreMaterial": str(item["NombreMaterial"]),
                 "Proveedor": str(item["Proveedor"]),
+                "FacturaGuia": str(item["FacturaGuia"]),
+                "Transporte": str(item["Transporte"]),
+                "Placa": str(item["Placa"]),
                 "LoteProveedor": str(item["Lote"]),
                 "Cantidad": item["Cantidad"],
                 "Unidad": str(item["Unidad"]),
@@ -341,8 +369,8 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
-      " datos y apruebe para rellenar exactamente su checklist oficial de"
-      " Excel."
+      " datos y apruebe para rellenar exactamente el checklist oficial y"
+      " generar el certificado PDF."
   )
 
   clave_ingresada = st.text_input(
@@ -371,18 +399,13 @@ with tab2:
           c1, c2 = st.columns(2)
           with c1:
             st.write(f"**Planta:** {row['Planta']}")
-            st.write(f"**Tipo de Material:** {row['TipoMaterial']}")
             st.write(f"**Proveedor:** {row['Proveedor']}")
-            st.write(f"**Criticidad:** {row['Criticidad']}")
-            st.write(f"**Cantidad:** {row['Cantidad']} {row['Unidad']}")
+            st.write(f"**Factura / Guía:** {row['FacturaGuia']}")
+            st.write(f"**Transporte:** {row['Transporte']} (Placa: {row['Placa']})")
           with c2:
-            st.write(
-                f"**Prod. / Venc.:** {row['FechaProduccion']} al"
-                f" {row['FechaVencimiento']}"
-            )
-            st.write(f"**Temperatura:** {row['Temperatura']} °C")
+            st.write(f"**Cantidad:** {row['Cantidad']} {row['Unidad']}")
+            st.write(f"**Prod. / Venc.:** {row['FechaProduccion']} al {row['FechaVencimiento']}")
             st.write(f"**Operador:** {row['Responsable']}")
-            st.write(f"**Fecha Ingreso:** {row['Fecha']}")
 
           if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
             if str(row["RutaPdfCert"]).endswith((".jpg", ".jpeg", ".png")):
@@ -397,7 +420,7 @@ with tab2:
                 "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
             )
             aprobar = st.form_submit_button(
-                "Aprobar y Rellenar Checklist Oficial de Excel 🛡️",
+                "Aprobar, Generar Certificado PDF e Inyectar en Checklist 🛡️",
                 type="primary",
             )
 
@@ -408,7 +431,7 @@ with tab2:
               )
             else:
               with st.spinner(
-                  "Rellenando celdas de tu plantilla oficial de Excel..."
+                  "Generando certificado oficial PDF y completando Excel..."
               ):
                 carpeta_base = "./Registros_Oficiales"
                 subcarpeta_lote = (
@@ -426,7 +449,7 @@ with tab2:
                 )
                 os.makedirs(ruta_destino, exist_ok=True)
 
-                # Generar Certificado PDF firmado
+                # 1. GENERAR CERTIFICADO PDF OFICIAL IDÉNTICO
                 nombre_cert_oficial = (
                     f"Certificado_Firmado_{row['LoteProveedor']}.pdf"
                 )
@@ -434,58 +457,62 @@ with tab2:
                     ruta_destino, nombre_cert_oficial
                 )
 
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Arial", "B", 16)
+                pdf.cell(
+                    0,
+                    10,
+                    f"Certificado de Calidad - {row['NombreMaterial']}",
+                    0,
+                    1,
+                    "C",
+                )
+                pdf.set_font("Arial", "", 12)
+                pdf.cell(
+                    0,
+                    10,
+                    f"Planta: {row['Planta']} | Proveedor: {row['Proveedor']}",
+                    0,
+                    1,
+                    "C",
+                )
+                pdf.cell(
+                    0,
+                    10,
+                    f"Lote: {row['LoteProveedor']} | Factura/Guía: {row['FacturaGuia']}",
+                    0,
+                    1,
+                    "C",
+                )
+                pdf.cell(
+                    0,
+                    10,
+                    (
+                        f"Aprobado por: {nombre_supervisor} | Fecha:"
+                        f" {row['Fecha']}"
+                    ),
+                    0,
+                    1,
+                    "C",
+                )
+                pdf.ln(10)
+
                 if row["RutaPdfCert"] and os.path.exists(
                     str(row["RutaPdfCert"])
                 ):
                   if str(row["RutaPdfCert"]).endswith((".jpg", ".jpeg", ".png")):
-                    pdf = FPDF()
-                    pdf.add_page()
-                    pdf.set_font("Arial", "B", 14)
-                    pdf.cell(
-                        0,
-                        10,
-                        f"Certificado de Calidad - {row['NombreMaterial']}",
-                        0,
-                        1,
-                        "C",
-                    )
-                    pdf.set_font("Arial", "", 11)
-                    pdf.cell(
-                        0,
-                        10,
-                        (
-                            f"Planta: {row['Planta']} | Proveedor:"
-                            f" {row['Proveedor']}"
-                        ),
-                        0,
-                        1,
-                        "C",
-                    )
-                    pdf.cell(
-                        0,
-                        10,
-                        (
-                            f"Lote: {row['LoteProveedor']} | Aprobado por:"
-                            f" {nombre_supervisor}"
-                        ),
-                        0,
-                        1,
-                        "C",
-                    )
-                    pdf.ln(5)
-                    pdf.image(row["RutaPdfCert"], x=15, y=50, w=180)
-                    pdf.output(ruta_cert_final)
-                  else:
-                    os.rename(row["RutaPdfCert"], ruta_cert_final)
+                    pdf.image(row["RutaPdfCert"], x=15, y=65, w=180)
 
-                # RELLENAR EXACTAMENTE LAS CELDAS DE TU CHECKLIST OFICIAL (BUSCANDO ARCHIVO R ICC)
+                pdf.output(ruta_cert_final)
+
+                # 2. INYECTAR DATOS EN TU CHECKLIST OFICIAL DE EXCEL
                 prefijo_archivo = (
                     f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
                     )
                 )
                 
-                # Búsqueda automática del checklist oficial en el repositorio
                 archivos_repo = os.listdir('.')
                 plantillas_disponibles = [
                     f for f in archivos_repo 
@@ -501,7 +528,7 @@ with tab2:
                   wb = openpyxl.load_workbook(ruta_plantilla)
                   ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
                   
-                  # Inyección exacta campo por campo en las coordenadas de tu formato
+                  # Celdas exactas según tu formato oficial del PDF
                   ws['C5'] = row['Fecha']                   # Fecha de recepción
                   ws['C16'] = row['Proveedor']              # Proveedor
                   ws['C17'] = row['NombreMaterial']         # Material
@@ -514,8 +541,8 @@ with tab2:
                   if str(row['Temperatura']) != "N/A":
                     ws['D39'] = float(row['Temperatura'])   # Temperatura del material
                   
-                  ws['C51'] = row['Responsable']            # Operador que realiza la recepción
-                  ws['C53'] = nombre_supervisor             # Firma / Supervisor de Calidad
+                  ws['C51'] = row['Responsable']            # Persona que realiza la recepción
+                  ws['C53'] = nombre_supervisor             # Firma de Calidad
 
                   wb.save(ruta_excel_final)
                 else:
@@ -539,8 +566,8 @@ with tab2:
                 guardar_pendientes(df_p)
 
                 st.success(
-                    "🎉 ¡Checklist oficial de Excel rellenado y firmado con éxito! "
-                    f"Guardado en: `{ruta_destino}`"
+                    "🎉 ¡Certificado PDF y Checklist de Excel oficial generados"
+                    f" con éxito! Guardado en: `{ruta_destino}`"
                 )
                 st.rerun()
   elif clave_ingresada == "":
@@ -592,13 +619,12 @@ with tab3:
             "TipoMaterial",
             "NombreMaterial",
             "Proveedor",
+            "FacturaGuia",
             "LoteProveedor",
             "Cantidad",
             "Unidad",
             "FechaProduccion",
             "FechaVencimiento",
-            "Criticidad",
-            "Fecha",
             "FirmaCalidad",
         ]],
         use_container_width=True,
@@ -614,7 +640,6 @@ with tab3:
       ):
         col_d1, col_d2 = st.columns(2)
 
-        # Botón para descargar el Excel oficial rellenado campo por campo
         with col_d1:
           if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and str(row["RutaExcel"]).strip() != "" and os.path.exists(str(row["RutaExcel"])):
             with open(row["RutaExcel"], "rb") as f:
@@ -630,7 +655,6 @@ with tab3:
           else:
             st.info("Archivo Excel en proceso o no disponible.")
 
-        # Botón para descargar el PDF del Certificado firmado
         with col_d2:
           if "RutaPdfCert" in row and pd.notna(row["RutaPdfCert"]) and str(row["RutaPdfCert"]).strip() != "" and os.path.exists(str(row["RutaPdfCert"])):
             with open(row["RutaPdfCert"], "rb") as f:
