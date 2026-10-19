@@ -38,7 +38,7 @@ st.title("📦 Sistema de Trazabilidad y Control de Calidad")
 st.markdown("---")
 
 ARCHIVO_PENDIENTES = "registros_pendientes.csv"
-ARCHIVO_CATALOGO = "proveedores_materiales.xlsx"
+ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
 
 
 def cargar_pendientes():
@@ -205,9 +205,9 @@ with tab1:
         )
   else:
     st.warning(
-        "⚠️ No se detectó automáticamente el catálogo"
-        " `proveedores_materiales.xlsx` en el repositorio. Súbelo usando la"
-        " barra lateral o verifica que esté en GitHub."
+        "⚠️ No se detectó automáticamente el catálogo en el repositorio."
+        " Asegúrate de haber subido el archivo"
+        " `Maestro_Materiales_Proveedores (2).xlsx` a GitHub."
     )
 
 # ------------------------------------------
@@ -226,7 +226,7 @@ with tab2:
       "Contraseña de Supervisor de Calidad", type="password"
   )
   CLAVE_SUPERVISOR = (
-      "1234"  # Aquí puedes cambiar la clave de seguridad cuando gustes
+      "1234"  # Puedes cambiar la contraseña aquí cuando gustes
   )
 
   if clave_ingresada == CLAVE_SUPERVISOR:
