@@ -1,9 +1,9 @@
 from datetime import datetime
 import os
 import shutil
+import openpyxl
 import pandas as pd
 import streamlit as st
-from fpdf import FPDF
 
 # Configuración de diseño de página
 st.set_page_config(
@@ -38,6 +38,7 @@ st.markdown("---")
 
 ARCHIVO_PENDIENTES = "registros_pendientes.csv"
 ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
+ARCHIVO_PLANTILLA = "plantilla_maestra_checklist.xlsx"
 
 def cargar_pendientes():
   if os.path.exists(ARCHIVO_PENDIENTES):
@@ -47,7 +48,7 @@ def cargar_pendientes():
         "LoteProveedor", "FacturaGuia", "Transporte", "Placa",
         "Unidad", "Temperatura", "FechaProduccion", "FechaVencimiento",
         "Criticidad", "Responsable", "Fecha", "Estado", "FirmaCalidad",
-        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert"
+        "RutaCarpeta", "RutaExcel", "RutaPdfCert", "RutaChecklistOficial"
     ]
     for col in columnas_texto:
       if col not in df.columns:
@@ -61,160 +62,13 @@ def cargar_pendientes():
         "LoteProveedor", "FacturaGuia", "Transporte", "Placa", "Cantidad",
         "Unidad", "Temperatura", "FechaProduccion", "FechaVencimiento",
         "Criticidad", "Responsable", "Fecha", "Estado", "FirmaCalidad",
-        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert"
+        "RutaCarpeta", "RutaExcel", "RutaPdfCert", "RutaChecklistOficial"
     ])
 
 def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
-def generar_pdf_checklist(row, supervisor, ruta_guardado):
-    # Crear PDF en formato Horizontal (Landscape)
-    pdf = FPDF(orientation='L', unit='mm', format='A4')
-    pdf.add_page()
-    
-    # --- ENCABEZADO ---
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(277, 8, 'Check list de recepción de materiales', border=1, align='C', ln=1)
-    pdf.set_font('Arial', '', 9)
-    pdf.cell(92, 6, 'Código: R ICC-14-1', border=1, align='C')
-    pdf.cell(93, 6, 'Aseguramiento de Calidad', border=1, align='C')
-    pdf.cell(92, 6, 'Versión: 5', border=1, align='C', ln=1)
-    pdf.ln(3)
-
-    # --- 1. DATOS GENERALES ---
-    pdf.set_fill_color(220, 230, 241)
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(277, 6, '1. DATOS GENERALES Y TRANSPORTE', border=1, align='L', fill=True, ln=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(40, 6, 'Fecha de recepción:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(50, 6, str(row['Fecha']).split()[0], border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(45, 6, 'No. Factura/Guía:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(45, 6, str(row['FacturaGuia']), border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(45, 6, 'Planta:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(52, 6, str(row['Planta']), border=1, ln=1)
-
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(40, 6, 'Nombre Transporte:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(50, 6, str(row.get('Transporte', row['Proveedor'])), border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(45, 6, 'Placa del transporte:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(45, 6, str(row.get('Placa', '')), border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(45, 6, 'No. de Marchamo:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(52, 6, 'N/A', border=1, ln=1)
-
-    # --- 2. DATOS DEL MATERIAL ---
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(277, 6, '2. DATOS DEL MATERIAL', border=1, align='L', fill=True, ln=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'Proveedor:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(60, 6, str(row['Proveedor']), border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'Material:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(60, 6, str(row['NombreMaterial']), border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'Cantidad/U:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(67, 6, f"{row['Cantidad']} {row['Unidad']}", border=1, ln=1)
-
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'Lote:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(60, 6, str(row['LoteProveedor']), border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'F. Producción:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(60, 6, str(row['FechaProduccion']), border=1)
-    
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'F. Vencimiento:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(67, 6, str(row['FechaVencimiento']), border=1, ln=1)
-
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'Temp. (°C):', border=1)
-    pdf.set_font('Arial', '', 8)
-    temp_val = str(row['Temperatura']) if str(row['Temperatura']) not in ["N/A", "nan", ""] else "N/A"
-    pdf.cell(60, 6, temp_val, border=1)
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(30, 6, 'Criticidad:', border=1)
-    pdf.set_font('Arial', '', 8)
-    pdf.cell(157, 6, str(row['Criticidad']), border=1, ln=1)
-
-    pdf.ln(3)
-
-    # --- 3. PUNTOS DE INSPECCIÓN (CHECKLIST EXACTO) ---
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(217, 6, '3. INSPECCIÓN DE MATERIAL Y TRANSPORTE', border=1, align='C', fill=True)
-    pdf.cell(20, 6, 'SI', border=1, align='C', fill=True)
-    pdf.cell(20, 6, 'NO', border=1, align='C', fill=True)
-    pdf.cell(20, 6, 'N/A', border=1, align='C', fill=True, ln=1)
-    
-    preguntas = [
-        ("1. ¿El marchamo se encuentra alterado?", "NO"),
-        ("2. ¿El candado se encuentra alterado?", "NO"),
-        ("3. ¿El (los) lote(s) posee(n) más de un mes de vida?", "SI"),
-        ("4. ¿El Certificado de Análisis corresponde al número de lote?", "SI"),
-        ("5. ¿Los resultados del Certificado cumplen con los parámetros?", "SI"),
-        ("6. ¿El empaque del material se encuentra íntegro y sin deterioro?", "SI"),
-        ("7. ¿El material está protegido de la intemperie?", "SI"),
-        ("8. ¿Coincide la entrega según documento contra lo físico?", "SI"),
-        ("9. ¿Se encuentra el transporte libre de plagas?", "SI"),
-        ("10. ¿El techo, paredes o lona se encuentran íntegras y sin agujeros?", "SI"),
-        ("11. ¿El techo, paredes o lona se encuentran limpios?", "SI"),
-        ("12. ¿El piso del transporte está limpio y en buenas condiciones?", "SI"),
-        ("13. ¿El transporte cumple con la temperatura especificada?", "SI" if temp_val != "N/A" else "N/A"),
-        ("14. ¿El transporte se encuentra libre de olores extraños?", "NO"),
-        ("15. ¿La tarima retornable se encuentra en buenas condiciones?", "SI")
-    ]
-    
-    pdf.set_font('Arial', '', 8)
-    for preg, resp_ideal in preguntas:
-        pdf.cell(217, 5, preg, border=1)
-        pdf.cell(20, 5, 'X' if resp_ideal == 'SI' else '', border=1, align='C')
-        pdf.cell(20, 5, 'X' if resp_ideal == 'NO' else '', border=1, align='C')
-        pdf.cell(20, 5, 'X' if resp_ideal == 'N/A' else '', border=1, align='C', ln=1)
-        
-    pdf.ln(3)
-    
-    # --- RESULTADO Y FIRMAS ---
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(40, 8, 'Resultado Final:', border=1)
-    pdf.set_text_color(0, 128, 0)
-    pdf.cell(237, 8, 'APROBADO (Validado Digitalmente)', border=1, align='C', ln=1)
-    pdf.set_text_color(0, 0, 0)
-    
-    pdf.ln(6)
-    pdf.cell(138, 5, 'Nombre de la persona que realiza la recepción:', 0, 0, 'L')
-    pdf.cell(139, 5, 'Vo. Bo. Calidad:', 0, 1, 'L')
-    
-    pdf.set_font('Arial', '', 9)
-    pdf.cell(138, 5, str(row['Responsable']), 0, 0, 'L')
-    pdf.cell(139, 5, str(supervisor), 0, 1, 'L')
-    
-    pdf.output(ruta_guardado)
-
-
-# Inicializar variables
+# Inicializar carrito temporal en sesión
 if "items_ingreso_actual" not in st.session_state:
   st.session_state.items_ingreso_actual = []
 
@@ -225,14 +79,29 @@ if os.path.exists(ARCHIVO_CATALOGO):
     df_db = pd.read_excel(ARCHIVO_CATALOGO)
     df_db.columns = df_db.columns.str.strip()
   except Exception as e:
-    st.error(f"Error al leer el catálogo automático: {e}")
+    st.error(f"Error al leer el catálogo: {e}")
 
+# ------------------------------------------
+# PANEL LATERAL DE ADMINISTRACIÓN
+# ------------------------------------------
 st.sidebar.header("⚙️ Panel de Administración")
-archivo_catalogo_nuevo = st.sidebar.file_uploader("Actualizar Catálogo Excel", type=["xlsx"])
+
+# 1. Subir Catálogo
+archivo_catalogo_nuevo = st.sidebar.file_uploader("1. Actualizar Catálogo (Excel)", type=["xlsx"])
 if archivo_catalogo_nuevo is not None:
-  df_db = pd.read_excel(archivo_catalogo_nuevo)
+  with open(ARCHIVO_CATALOGO, "wb") as f:
+      f.write(archivo_catalogo_nuevo.getbuffer())
+  df_db = pd.read_excel(ARCHIVO_CATALOGO)
   df_db.columns = df_db.columns.str.strip()
-  st.sidebar.success("¡Catálogo actualizado correctamente!")
+  st.sidebar.success("¡Catálogo actualizado!")
+
+# 2. Subir Plantilla del Checklist (NUEVO)
+st.sidebar.markdown("---")
+plantilla_nueva = st.sidebar.file_uploader("2. Subir Plantilla de Checklist Oficial (Excel en blanco)", type=["xlsx"])
+if plantilla_nueva is not None:
+    with open(ARCHIVO_PLANTILLA, "wb") as f:
+        f.write(plantilla_nueva.getbuffer())
+    st.sidebar.success("¡Plantilla Oficial cargada con éxito! El sistema la usará para rellenar los datos.")
 
 tab1, tab2, tab3 = st.tabs([
     "📝 1. Ingreso de Operador",
@@ -256,7 +125,6 @@ with tab1:
 
     plantas = df_db[col_planta].dropna().unique()
     planta_sel = st.selectbox("Planta", plantas)
-
     df_planta = df_db[df_db[col_planta] == planta_sel]
 
     col1, col2 = st.columns(2)
@@ -340,7 +208,7 @@ with tab1:
             "Proveedor": proveedor_sel,
             "NombreMaterial": material_sel,
             "FacturaGuia": factura_guia,
-            "Transporte": proveedor_sel, # Transporte es igual al proveedor
+            "Transporte": proveedor_sel, # Transporte igual al proveedor
             "Placa": placa_transporte,
             "Lote": lote_proveedor,
             "Cantidad": cantidad,
@@ -408,6 +276,7 @@ with tab1:
                 "Estado": "Pendiente",
                 "FirmaCalidad": "Sin firmar",
                 "RutaCarpeta": "",
+                "RutaExcel": "",
                 "RutaChecklistOficial": "",
                 "RutaPdfCert": str(item["RutaTemp"]),
             }
@@ -416,7 +285,7 @@ with tab1:
 
           guardar_pendientes(df_p)
           st.session_state.items_ingreso_actual = []
-          st.success("🎉 ¡Todos los productos con sus certificados fueron enviados con éxito al panel de calidad!")
+          st.success("🎉 ¡Todos los productos fueron enviados con éxito al panel de calidad!")
 
   else:
     st.warning("⚠️ No se detectó automáticamente el catálogo en el repositorio.")
@@ -426,7 +295,7 @@ with tab1:
 # ------------------------------------------
 with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
-  st.markdown("Ingrese su contraseña, revise los datos, apruebe para generar el checklist final en PDF o elimine registros incorrectos.")
+  st.markdown("Ingrese su contraseña, revise los datos, apruebe para rellenar la **Plantilla de Excel** que subió o elimine registros incorrectos.")
 
   clave_ingresada = st.text_input("Contraseña de Supervisor de Calidad", type="password", key="pass_calidad")
   CLAVE_SUPERVISOR = "1234"
@@ -444,7 +313,7 @@ with tab2:
           c1, c2 = st.columns(2)
           with c1:
             st.write(f"**Planta:** {row['Planta']}")
-            st.write(f"**Proveedor (Transporte):** {row['Proveedor']}")
+            st.write(f"**Proveedor:** {row['Proveedor']}")
             st.write(f"**Factura / Guía:** {row['FacturaGuia']}")
             st.write(f"**Placa de Transporte:** {row['Placa']}")
           with c2:
@@ -456,20 +325,20 @@ with tab2:
             if str(row["RutaPdfCert"]).endswith((".jpg", ".jpeg", ".png")):
               st.image(row["RutaPdfCert"], caption="Certificado Adjunto", width=350)
             else:
-              st.write("📄 Certificado PDF adjunto disponible.")
+              st.write("📄 Certificado PDF del proveedor adjunto disponible.")
 
           col_btn1, col_btn2 = st.columns(2)
           
           with col_btn1:
             with st.form(f"form_firma_{row['ID']}"):
               nombre_supervisor = st.text_input("Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}")
-              aprobar = st.form_submit_button("Aprobar y Generar Checklist Horizontal PDF 🛡️", type="primary")
+              aprobar = st.form_submit_button("Aprobar y Rellenar Plantilla Excel 🛡️", type="primary")
 
             if aprobar:
               if not nombre_supervisor:
                 st.error("Debe ingresar su nombre para firmar.")
               else:
-                with st.spinner("Creando el formato oficial horizontal..."):
+                with st.spinner("Rellenando tu plantilla oficial de Excel..."):
                   carpeta_base = "./Registros_Oficiales"
                   subcarpeta_lote = f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(" ", "_")
                   ruta_destino = os.path.join(carpeta_base, str(row["Planta"]), str(row["TipoMaterial"]), str(row["NombreMaterial"]), subcarpeta_lote)
@@ -483,20 +352,49 @@ with tab2:
                   if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
                     shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
 
-                  # 2. Generar el nuevo Checklist completo desde cero en PDF Horizontal
-                  nombre_checklist_pdf = f"Checklist_Generado_{row['LoteProveedor']}.pdf"
-                  ruta_checklist_final = os.path.join(ruta_destino, nombre_checklist_pdf)
-                  
-                  generar_pdf_checklist(row, nombre_supervisor, ruta_checklist_final)
+                  # 2. Llenar el Excel con la plantilla que se subió en el panel de administración
+                  prefijo_archivo = f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(" ", "_")
+                  ruta_excel_final = os.path.join(ruta_destino, f"{prefijo_archivo}.xlsx")
 
+                  # Si subieron la plantilla maestra, la usamos. Si no, usa respaldo.
+                  if os.path.exists(ARCHIVO_PLANTILLA):
+                    wb = openpyxl.load_workbook(ARCHIVO_PLANTILLA)
+                    ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
+                    
+                    # Rellenando los campos detectados en tu plantilla R ICC 14-1
+                    ws['C5'] = row['Fecha']                    # Fecha de recepción
+                    ws['F5'] = row['FacturaGuia']              # Número de factura/guía
+                    ws['D6'] = row['Transporte']               # Nombre del transporte
+                    ws['D7'] = row['Placa']                    # Placa
+                    ws['C16'] = row['Proveedor']               # Proveedor
+                    ws['C17'] = row['NombreMaterial']          # Material
+                    ws['C18'] = float(row['Cantidad']) if pd.notna(row['Cantidad']) else 0.0
+                    ws['C19'] = row['Unidad']                  # Unidad
+                    ws['C20'] = row['LoteProveedor']           # Lote
+                    ws['C21'] = str(row['FechaProduccion'])    # F. Producción
+                    ws['C22'] = str(row['FechaVencimiento'])   # F. Vencimiento
+                    
+                    if str(row['Temperatura']) != "N/A":
+                      ws['D39'] = float(row['Temperatura'])    # Temperatura
+                    
+                    ws['C51'] = row['Responsable']             # Operador
+                    ws['C53'] = nombre_supervisor              # Firma Supervisor
+
+                    wb.save(ruta_excel_final)
+                  else:
+                    df_resp = pd.DataFrame([row])
+                    df_resp.to_excel(ruta_excel_final, index=False)
+                    st.warning("No se encontró la Plantilla de Checklist. Se generó un Excel básico. (Recuerde subir su plantilla en la barra lateral).")
+
+                  # Guardar las rutas en el historial
                   df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
                   df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(nombre_supervisor)
                   df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = str(ruta_destino)
-                  df_p.loc[df_p["ID"] == row["ID"], "RutaChecklistOficial"] = str(ruta_checklist_final)
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaExcel"] = str(ruta_excel_final)
                   df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(ruta_cert_final)
                   guardar_pendientes(df_p)
 
-                  st.success("🎉 ¡Aprobado! El Checklist completo ha sido generado en PDF.")
+                  st.success("🎉 ¡Aprobado! Checklist de Excel generado correctamente.")
                   st.rerun()
 
           with col_btn2:
@@ -517,7 +415,7 @@ with tab2:
 # ------------------------------------------
 with tab3:
   st.header("🔍 Buscador y Consulta de Registros Oficiales")
-  st.markdown("Consulte el historial de recepciones aprobadas, descargue los checklists generados o elimine registros.")
+  st.markdown("Consulte el historial de recepciones aprobadas, descargue los checklists de Excel o elimine registros.")
 
   df_p = cargar_pendientes()
   aprobados = df_p[df_p["Estado"] == "Aprobado"] if not df_p.empty else pd.DataFrame()
@@ -545,14 +443,17 @@ with tab3:
       with st.expander(f"📁 Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Aprobado por: {row['FirmaCalidad']}"):
         col_d1, col_d2, col_d3 = st.columns(3)
 
+        # Usamos row.get para soportar tanto RutaExcel como RutaChecklistOficial de versiones anteriores
+        ruta_checklist = row.get("RutaExcel", "") if str(row.get("RutaExcel", "")) != "nan" and str(row.get("RutaExcel", "")) != "" else row.get("RutaChecklistOficial", "")
+
         with col_d1:
-          if "RutaChecklistOficial" in row and pd.notna(row["RutaChecklistOficial"]) and str(row["RutaChecklistOficial"]).strip() != "" and os.path.exists(str(row["RutaChecklistOficial"])):
-            with open(row["RutaChecklistOficial"], "rb") as f:
+          if pd.notna(ruta_checklist) and str(ruta_checklist).strip() != "" and os.path.exists(str(ruta_checklist)):
+            with open(str(ruta_checklist), "rb") as f:
               st.download_button(
-                  label="📊 Descargar Checklist Oficial (PDF)",
+                  label="📊 Descargar Checklist Oficial",
                   data=f,
-                  file_name=os.path.basename(str(row["RutaChecklistOficial"])),
-                  mime="application/pdf",
+                  file_name=os.path.basename(str(ruta_checklist)),
+                  mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if str(ruta_checklist).endswith(".xlsx") else "application/pdf",
                   key=f"dl_chk_{row['ID']}",
               )
           else:
