@@ -119,7 +119,6 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
 # ------------------------------------------
 def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
-    """Distribución limpia y exacta para los bloques superiores de Marchamo y Candado."""
     curr_x = x_start
     for i, opt in enumerate(opts):
         pdf.set_font('Arial', '', 7)
@@ -135,7 +134,6 @@ def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
         curr_x += 16
 
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
-    """Función centrada y uniforme para las preguntas principales de la tabla."""
     n = len(opts)
     ancho_total = 55.0
     espacio_item = ancho_total / n
@@ -418,7 +416,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS CORREGIDO ---
+    # --- ESPACIO DE FIRMAS ---
     pdf.ln(12) 
     y_linea1 = pdf.get_y()
 
@@ -426,7 +424,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.line(55, y_linea1, 135, y_linea1)
     pdf.line(175, y_linea1, 255, y_linea1)
 
-    # Nombre del operador y supervisor sobre la línea 1
     pdf.set_xy(55, y_linea1 - 4)
     pdf.set_font('Arial', '', 8)
     pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
@@ -434,12 +431,10 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(175, y_linea1 - 4)
     pdf.cell(80, 4, supervisor, 0, 0, 'C')
 
-    # Etiqueta de la persona que realiza la recepción (Tamaño ajustado a 6.5 pt y x=10 para que no se corte)
     pdf.set_xy(10, y_linea1 - 0.5)
     pdf.set_font('Arial', 'B', 6.5)
     pdf.cell(43, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
     
-    # Etiqueta Vo. Bo. Calidad
     pdf.set_xy(145, y_linea1 - 0.5)
     pdf.set_font('Arial', 'B', 8)
     pdf.cell(28, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
@@ -456,7 +451,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(155, y_linea2 - 1)
     pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
 
-    # Inserción de imágenes de firma sobre la segunda línea
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
@@ -676,7 +670,7 @@ with tab2:
   st.header("✍️ Panel de Control y Firma")
   
   clave_ingresada = st.text_input("Contraseña de Supervisor", type="password")
-  CLAVE_SUPERVISOR = "1234"
+  CLAVE_SUPERVISOR = "123456"
 
   if clave_ingresada == CLAVE_SUPERVISOR:
     st.success("🔓 Acceso autorizado.")
@@ -687,7 +681,7 @@ with tab2:
       st.info("No hay registros pendientes.")
     else:
       for index, row in pendientes.iterrows():
-        with st.expander(f"📥 ID #{row['ID']} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']}"):
+        with st.expander(f"📥 ID #{row['ID']} | Planta: {row.get('Planta', 'N/A')} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']}"):
           st.write(f"**Operador Responsable:** {row['Responsable']}")
           if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
             st.write("📄 Certificado adjunto.")
@@ -760,24 +754,27 @@ with tab3:
   else:
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-      busqueda = st.text_input("Filtro rápido (Lote, Material o Proveedor)")
+      busqueda = st.text_input("Filtro rápido (Planta, Lote, Material o Proveedor)")
     with col_f2:
-      fecha_filtro = st.date_input("Filtrar por Fecha de Ingreso a SAP", value=None)
+      fecha_filtro = st.date_input("Filtrar por Fecha de Recepción", value=None)
 
     resultado = aprobados.copy()
     if busqueda:
       resultado = resultado[
+          resultado["Planta"].astype(str).str.contains(busqueda, case=False, na=False) |
           resultado["LoteProveedor"].astype(str).str.contains(busqueda, case=False, na=False) |
           resultado["NombreMaterial"].astype(str).str.contains(busqueda, case=False, na=False) |
           resultado["Proveedor"].astype(str).str.contains(busqueda, case=False, na=False)
       ]
     if fecha_filtro:
-      resultado = resultado[resultado["IngresoSAP"] == str(fecha_filtro)]
+      resultado = resultado[resultado["Fecha"].str.startswith(str(fecha_filtro))]
 
-    st.dataframe(resultado[["Planta", "NombreMaterial", "FacturaGuia", "LoteProveedor", "IngresoSAP", "FirmaCalidad"]], use_container_width=True)
+    st.dataframe(resultado[["Planta", "NombreMaterial", "FacturaGuia", "LoteProveedor", "Fecha", "FirmaCalidad"]], use_container_width=True)
 
     for idx, row in resultado.iterrows():
-      with st.expander(f"📁 {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Fecha SAP: {row['IngresoSAP']}"):
+      planta_val = row.get('Planta', 'N/A')
+      fecha_rec = str(row['Fecha']).split()[0]
+      with st.expander(f"📁 Planta: {planta_val} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Fecha Recepción: {fecha_rec}"):
         col_d1, col_d2, col_d3 = st.columns(3)
         ruta_chk = str(row.get("RutaChecklistOficial", ""))
         with col_d1:
