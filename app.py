@@ -119,15 +119,21 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
 # ------------------------------------------
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
-    """Dibuja opciones (SI/NO/N/A o SI/NO) con posiciones fijas absolutas para evitar desalineaciones."""
-    curr_x = x_start
-    ancho_bloque = 55.0 / len(opts)
+    """Dibuja opciones distribuidas uniformemente y alineadas en el bloque de 55mm."""
+    n = len(opts)
+    ancho_total = 55.0
+    espacio_item = ancho_total / n
     for i, opt in enumerate(opts):
+        sub_x = x_start + (i * espacio_item)
         pdf.set_font('Arial', '', 7)
-        pdf.set_xy(curr_x, y)
-        pdf.cell(ancho_bloque - 4, h_row, opt, 0, 0, 'R')
+        w_texto = pdf.get_string_width(opt)
         
-        box_x = curr_x + ancho_bloque - 3.5
+        # Centrar etiqueta y caja proporcionalmente dentro de su espacio asignado
+        text_x = sub_x + (espacio_item - (w_texto + 4.5)) / 2
+        pdf.set_xy(text_x, y)
+        pdf.cell(w_texto, h_row, opt, 0, 0, 'L')
+        
+        box_x = text_x + w_texto + 1.5
         box_y = y + (h_row - 3) / 2
         pdf.rect(box_x, box_y, 3, 3)
         
@@ -135,8 +141,6 @@ def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
             pdf.cell(3, 3, 'X', 0, 0, 'C')
-            
-        curr_x += ancho_bloque
 
 def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
@@ -212,7 +216,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo (Pregunta 1) - x = 50 para que N/A quede dentro del cuadro (100mm ancho)
+    # Marchamo (Pregunta 1)
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
     pdf.cell(40, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
@@ -400,15 +404,14 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS IDÉNTICO A LAS FOTOS 2 Y 3 ---
+    # --- ESPACIO DE FIRMAS ---
     pdf.ln(12) 
     y_linea1 = pdf.get_y()
 
     # 1. Primera línea (Línea para el nombre)
-    pdf.line(55, y_linea1, 135, y_linea1)   # Línea Nombre Operador
-    pdf.line(175, y_linea1, 255, y_linea1)  # Línea Nombre Supervisor
+    pdf.line(55, y_linea1, 135, y_linea1)
+    pdf.line(175, y_linea1, 255, y_linea1)
 
-    # Nombres impresos justo ARRIBA de la primera línea
     pdf.set_xy(55, y_linea1 - 4)
     pdf.set_font('Arial', '', 8)
     pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
@@ -416,7 +419,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(175, y_linea1 - 4)
     pdf.cell(80, 4, supervisor, 0, 0, 'C')
 
-    # Etiquetas a la izquierda de la primera línea
     pdf.set_xy(10, y_linea1 - 1)
     pdf.set_font('Arial', 'B', 8)
     pdf.cell(44, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
@@ -426,17 +428,15 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     # 2. Segunda línea (Línea para la Firma)
     y_linea2 = y_linea1 + 10
-    pdf.line(55, y_linea2, 135, y_linea2)   # Línea Firma Operador
-    pdf.line(175, y_linea2, 255, y_linea2)  # Línea Firma Supervisor
+    pdf.line(55, y_linea2, 135, y_linea2)
+    pdf.line(175, y_linea2, 255, y_linea2)
 
-    # Etiquetas "Firma:" a la izquierda de la segunda línea
     pdf.set_xy(35, y_linea2 - 1)
     pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
     
     pdf.set_xy(155, y_linea2 - 1)
     pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
 
-    # Insertar Imágenes de las firmas exactamente encima de la segunda línea
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
