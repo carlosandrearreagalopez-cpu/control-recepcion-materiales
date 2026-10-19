@@ -117,8 +117,8 @@ def cargar_pendientes():
       else:
         df[col] = df[col].astype(str)
     
-    if "Fecha" in df.columns and not df.empty:
-      df = df.sort_values(by="Fecha", ascending=False).reset_index(drop=True)
+    if "IngresoSAP" in df.columns and not df.empty:
+      df = df.sort_values(by="IngresoSAP", ascending=False).reset_index(drop=True)
       
     return df
   else:
@@ -181,7 +181,7 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # ------------------------------------------
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO CORREGIDO)
 # ------------------------------------------
-def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked, step=13.5):
+def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked, step=12.0):
     curr_x = x_start
     for i, opt in enumerate(opts):
         pdf.set_font('Arial', '', 7)
@@ -249,7 +249,9 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(35, h_row, 'Fecha de recepción:', 1, 0, 'R')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(60, h_row, str(row.get('Fecha', '')).split()[0], 1, 0, 'C')
+    # Usa la fecha de ingreso SAP seleccionada por el usuario
+    fecha_ingreso_sap = str(row.get('IngresoSAP', ''))
+    pdf.cell(60, h_row, fecha_ingreso_sap if fecha_ingreso_sap != 'nan' else str(row.get('Fecha', '')).split()[0], 1, 0, 'C')
     pdf.cell(15, h_row, '', 0, 0)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(67, h_row, 'Número de factura y/o guía:', 1, 0, 'R')
@@ -264,7 +266,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(67, h_row, 'Fecha de Ingreso a SAP:', 1, 0, 'R')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(100, h_row, str(row.get('IngresoSAP', '')), 1, 1, 'C')
+    pdf.cell(100, h_row, fecha_ingreso_sap, 1, 1, 'C')
 
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(35, h_row, 'Placa del transporte:', 1, 0, 'R')
@@ -306,7 +308,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     val_marchamo = str(row.get('Marchamo', ''))
     pdf.cell(55, h_row, val_marchamo if val_marchamo != 'nan' else '', 'B', 0, 'C')
 
-    # Candado (Pregunta 2) - Celda de texto ajustada a 47mm y opciones compactas en x=163 con step=12.0 para que N/A quede dentro del cuadro (hasta 200mm)
+    # Candado (Pregunta 2)
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
     pdf.cell(43, h_row, '¿El candado se encuentra alterado?', 0, 0)
@@ -620,7 +622,8 @@ with tab1:
       with c4:
         cantidad = st.number_input("Cantidad Recibida", min_value=0.0, format="%.2f")
       with c5:
-        unidad = st.selectbox("Unidad de Medida", ["Kg", "Litros", "Unidades", "Toneladas", "Galones", "Cajas"])
+        # Se incluye "Sacos" en las unidades
+        unidad = st.selectbox("Unidad de Medida", ["Kg", "Litros", "Sacos", "Unidades", "Toneladas", "Galones", "Cajas"])
 
       c6, c7 = st.columns(2)
       with c6:
@@ -720,7 +723,7 @@ with tab1:
               "TempTransporte": str(item["TempTransporte"]), "TempMaterial": str(item["TempMaterial"]),
               "FechaProduccion": str(item["Produccion"]), "FechaVencimiento": str(item["Vencimiento"]),
               "Criticidad": str(item["Criticidad"]), "Responsable": str(responsable),
-              "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "Estado": "Pendiente", "FirmaCalidad": "Sin firmar",
+              "Fecha": str(item["IngresoSAP"]), "Estado": "Pendiente", "FirmaCalidad": "Sin firmar",
               "RutaCarpeta": "", "RutaChecklistOficial": "", "RutaPdfCert": str(item["RutaTemp"]),
               "RutaFirmaOp": ruta_firma_op, "RutaFirmaSup": ""
           }
@@ -730,7 +733,7 @@ with tab1:
         guardar_pendientes(df_p)
         
         asunto_mail = "🚨 Nuevo Material Pendiente de Revisión - Sistema LIF"
-        cuerpo_mail = f"Se ha enviado un nuevo lote de material para revisión en el sistema LIF.\n\nOperador responsable: {responsable}\nFecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\nPor favor ingrese al sistema para su verificación y aprobación."
+        cuerpo_mail = f"Se ha enviado un nuevo lote de material para revisión en el sistema LIF.\n\nOperador responsable: {responsable}\nFecha de Ingreso: {item['IngresoSAP']}\n\nPor favor ingrese al sistema para su verificación y aprobación."
         enviar_notificacion_outlook(asunto_mail, cuerpo_mail)
 
         st.session_state.items_ingreso_actual = []
@@ -753,7 +756,7 @@ with tab2:
     st.info("No hay registros pendientes.")
   else:
     for index, row in pendientes.iterrows():
-      with st.expander(f"📥 ID #{row['ID']} | Planta: {row.get('Planta', 'N/A')} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Ingreso: {row['Fecha']}"):
+      with st.expander(f"📥 ID #{row['ID']} | Planta: {row.get('Planta', 'N/A')} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Ingreso SAP: {row['IngresoSAP']}"):
         st.write(f"**Operador Responsable:** {row['Responsable']}")
         if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
           st.write("📄 Certificado adjunto.")
@@ -826,7 +829,7 @@ with tab3:
     with col_f1:
       busqueda = st.text_input("Filtro rápido (Planta, Lote, Material o Proveedor)")
     with col_f2:
-      fecha_filtro = st.date_input("Filtrar por Fecha de Recepción", value=None)
+      fecha_filtro = st.date_input("Filtrar por Fecha de Ingreso", value=None)
 
     resultado = aprobados.copy()
     if busqueda:
@@ -837,14 +840,14 @@ with tab3:
           resultado["Proveedor"].astype(str).str.contains(busqueda, case=False, na=False)
       ]
     if fecha_filtro:
-      resultado = resultado[resultado["Fecha"].str.startswith(str(fecha_filtro))]
+      resultado = resultado[resultado["IngresoSAP"].str.startswith(str(fecha_filtro))]
 
-    st.dataframe(resultado[["Planta", "NombreMaterial", "FacturaGuia", "LoteProveedor", "Fecha", "FirmaCalidad"]], use_container_width=True)
+    st.dataframe(resultado[["Planta", "NombreMaterial", "FacturaGuia", "LoteProveedor", "IngresoSAP", "FirmaCalidad"]], use_container_width=True)
 
     for idx, row in resultado.iterrows():
       planta_val = row.get('Planta', 'N/A')
-      fecha_rec = str(row['Fecha']).split()[0]
-      with st.expander(f"📁 Planta: {planta_val} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Fecha Recepción: {fecha_rec}"):
+      fecha_rec = str(row.get('IngresoSAP', 'N/A'))
+      with st.expander(f"📁 Planta: {planta_val} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Ingreso SAP: {fecha_rec}"):
         col_d1, col_d2, col_d3 = st.columns(3)
         ruta_chk = str(row.get("RutaChecklistOficial", ""))
         with col_d1:
@@ -878,7 +881,7 @@ with tab4:
     columnas_reporte = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor", "LoteProveedor", 
         "FacturaGuia", "Placa", "IngresoSAP", "DocSAP", "EstadoMarchamo", "Marchamo",
-        "Cantidad", "Unidad", "TempTransporte", "TempMaterial", "Criticidad", "Fecha", "Responsable", "FirmaCalidad"
+        "Cantidad", "Unidad", "TempTransporte", "TempMaterial", "Criticidad", "IngresoSAP", "Responsable", "FirmaCalidad"
     ]
     df_reporte = aprobados_excel[columnas_reporte].copy()
     st.dataframe(df_reporte, use_container_width=True)
