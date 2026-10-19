@@ -590,7 +590,6 @@ with tab1:
     df_material = df_prov[df_prov[col_material] == material_sel]
     criticidad_val = str(df_material.iloc[0][col_criticidad]) if col_criticidad and not df_material.empty else "N/A"
 
-    # Verificación estricta: Si es envase, etiqueta, botella, tapa o material de empaque, NO requiere temperatura aunque tenga palabras como pulpa
     palabras_clave_empaque = ["envase", "etiqueta", "tapa", "botella", "caja", "bolsa", "film", "saco", "precinto", "carton"]
     es_empaque = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_empaque)
 
@@ -640,9 +639,10 @@ with tab1:
         st.subheader("❄️ Control de Temperaturas (Requerido por tipo de material)")
         tmp1, tmp2 = st.columns(2)
         with tmp1:
-            temp_trans = st.number_input("Temp. Transporte (°C)", value=4.0, format="%.1f")
+            # min_value establecido en -50.0 para permitir temperaturas bajo cero (frío / congelado)
+            temp_trans = st.number_input("Temp. Transporte (°C)", value=4.0, min_value=-50.0, max_value=100.0, format="%.1f")
         with tmp2:
-            temp_mat = st.number_input("Temp. del Material (°C)", value=4.0, format="%.1f")
+            temp_mat = st.number_input("Temp. del Material (°C)", value=4.0, min_value=-50.0, max_value=100.0, format="%.1f")
       else:
         st.info("ℹ️ Este material no requiere control de temperatura (se registrará automáticamente como N/A).")
 
@@ -679,24 +679,62 @@ with tab1:
 
     if len(st.session_state.items_ingreso_actual) > 0:
       st.markdown("---")
-      st.subheader("📋 Resumen de Productos Agregados")
+      st.subheader("📋 Resumen de Productos Agregados y Edición")
       
       for idx, item in enumerate(st.session_state.items_ingreso_actual):
           st.markdown(f"""
           <div style='background-color: #eef2f7; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #0066cc;'>
               <b>#{idx+1} - {item['NombreMaterial']}</b> | Proveedor: {item['Proveedor']} | Lote: {item['Lote']} | Cantidad: {item['Cantidad']} {item['Unidad']}<br>
-              <span style='color: #0d6efd; font-size: 0.9rem;'>✅ Certificado cargado correctamente: <b>{item['NombreCertificado']}</b></span>
+              <span style='color: #0d6efd; font-size: 0.9rem;'>✅ Certificado: <b>{item['NombreCertificado']}</b></span>
           </div>
           """, unsafe_allow_html=True)
 
-      item_a_borrar = st.selectbox(
-          "Quitar producto de la lista actual:",
-          options=range(len(st.session_state.items_ingreso_actual)),
-          format_func=lambda x: f"{st.session_state.items_ingreso_actual[x]['NombreMaterial']} (Lote: {st.session_state.items_ingreso_actual[x]['Lote']})"
-      )
-      if st.button("❌ Quitar seleccionado"):
-        st.session_state.items_ingreso_actual.pop(item_a_borrar)
-        st.rerun()
+      # --- OPCIÓN DE EDICIÓN DE PRODUCTOS YA AGREGADOS ---
+      with st.expander("✏️ Editar un producto agregado (si te confundiste en algo)"):
+          idx_editar = st.selectbox(
+              "Selecciona el producto a editar:",
+              options=range(len(st.session_state.items_ingreso_actual)),
+              format_func=lambda x: f"#{x+1} - {st.session_state.items_ingreso_actual[x]['NombreMaterial']} (Lote: {st.session_state.items_ingreso_actual[x]['Lote']})"
+          )
+          
+          item_actual = st.session_state.items_ingreso_actual[idx_editar]
+          
+          with st.form(f"form_editar_item_{idx_editar}"):
+              nuevo_lote = st.text_input("Lote del Proveedor", value=item_actual['Lote'])
+              nueva_factura = st.text_input("No. de Factura/Guía", value=item_actual['FacturaGuia'])
+              nueva_cantidad = st.number_input("Cantidad Recibida", min_value=0.0, value=float(item_actual['Cantidad']), format="%.2f")
+              
+              # Si requiere temperatura, permitir editarla también
+              temp_trans_edit = item_actual['TempTransporte']
+              temp_mat_edit = item_actual['TempMaterial']
+              if temp_trans_edit != "N/A":
+                  e_t1, e_t2 = st.columns(2)
+                  with e_t1:
+                      temp_trans_edit = st.number_input("Temp. Transporte (°C)", value=float(temp_trans_edit), min_value=-50.0, max_value=100.0, format="%.1f")
+                  with e_t2:
+                      temp_mat_edit = st.number_input("Temp. del Material (°C)", value=float(temp_mat_edit), min_value=-50.0, max_value=100.0, format="%.1f")
+
+              guardar_cambios = st.form_submit_button("💾 Guardar Cambios en este Producto")
+              if guardar_cambios:
+                  st.session_state.items_ingreso_actual[idx_editar]['Lote'] = nuevo_lote
+                  st.session_state.items_ingreso_actual[idx_editar]['FacturaGuia'] = nueva_factura
+                  st.session_state.items_ingreso_actual[idx_editar]['Cantidad'] = nueva_cantidad
+                  if temp_trans_edit != "N/A":
+                      st.session_state.items_ingreso_actual[idx_editar]['TempTransporte'] = temp_trans_edit
+                      st.session_state.items_ingreso_actual[idx_editar]['TempMaterial'] = temp_mat_edit
+                  st.success("¡Producto actualizado correctamente!")
+                  st.rerun()
+
+      col_del1, col_del2 = st.columns(2)
+      with col_del1:
+          item_a_borrar = st.selectbox(
+              "Quitar producto de la lista actual:",
+              options=range(len(st.session_state.items_ingreso_actual)),
+              format_func=lambda x: f"#{x+1} - {st.session_state.items_ingreso_actual[x]['NombreMaterial']}"
+          )
+          if st.button("❌ Quitar seleccionado"):
+            st.session_state.items_ingreso_actual.pop(item_a_borrar)
+            st.rerun()
 
       st.markdown("---")
       st.subheader("3. Finalizar y Enviar a Revisión")
@@ -785,18 +823,25 @@ with tab2:
                 ruta_firma_sup = guardar_firma(canvas_sup, f"firma_sup_{row['ID']}")
                 row['RutaFirmaSup'] = ruta_firma_sup
 
-                ext_cert = os.path.splitext(str(row["RutaPdfCert"]))[1] if row["RutaPdfCert"] else ".pdf"
+                ruta_cert_origen = str(row.get("RutaPdfCert", ""))
+                ext_cert = os.path.splitext(ruta_cert_origen)[1] if ruta_cert_origen else ".pdf"
                 ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{row['LoteProveedor']}{ext_cert}")
-                if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
-                  shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
+                
+                if ruta_cert_origen and os.path.exists(ruta_cert_origen):
+                    shutil.copy(ruta_cert_origen, ruta_cert_final)
+                else:
+                    ruta_cert_final = ""
 
                 ruta_checklist_temp = os.path.join(ruta_destino, f"TEMP_Checklist_{row['LoteProveedor']}.pdf")
                 generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_temp)
 
                 ruta_unificada = os.path.join(ruta_destino, f"Registro_Auditoria_{row['LoteProveedor']}.pdf")
-                generar_documento_unificado(ruta_checklist_temp, ruta_cert_final, ruta_unificada)
+                if ruta_cert_final and os.path.exists(ruta_cert_final):
+                    generar_documento_unificado(ruta_checklist_temp, ruta_cert_final, ruta_unificada)
+                else:
+                    generar_documento_unificado(ruta_checklist_temp, "", ruta_unificada)
                 
-                if os.path.exists(ruta_checklist_temp) and os.path.exists(ruta_unificada):
+                if os.path.exists(ruta_checklist_temp):
                     os.remove(ruta_checklist_temp)
 
                 df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
