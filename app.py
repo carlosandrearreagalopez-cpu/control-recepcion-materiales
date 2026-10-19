@@ -736,7 +736,7 @@ with tab1:
 
       st.markdown("---")
       st.subheader("3. Finalizar y Enviar a Revisión")
-      responsable = st.selectbox("Operador Responsable", ["Carlos López", "Carlos Gallardo", "Willy", "Ronald"])
+      responsable = st.selectbox("Operador Responsable", ["Carlos López", "Carlos Gallardo", "Carlos Tema", "Oliver", "Willy", "Ronald"])
       
       st.write("✍️ **Dibuja tu Firma de Operador:**")
       canvas_op = None
@@ -815,7 +815,6 @@ with tab2:
               with st.spinner("Generando y unificando el PDF de Auditoría..."):
                 carpeta_base = "./Registros_Oficiales"
                 
-                # --- SANITIZACIÓN DE CARACTERES PARA EVITAR FileNotFoundError ---
                 planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace("\\", "_")
                 tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace("\\", "_")
                 nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace("\\", "_")
@@ -824,7 +823,6 @@ with tab2:
                 subcarpeta_lote = f"Lote_{lote_safe}_{nombre_mat_safe}"
                 ruta_destino = os.path.join(carpeta_base, planta_safe, tipo_mat_safe, nombre_mat_safe, subcarpeta_lote)
                 os.makedirs(ruta_destino, exist_ok=True)
-                # ---------------------------------------------------------------
 
                 ruta_firma_sup = guardar_firma(canvas_sup, f"firma_sup_{row['ID']}")
                 row['RutaFirmaSup'] = ruta_firma_sup
