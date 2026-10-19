@@ -64,21 +64,23 @@ def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
 
-# CARGAR CATÁLOGO AUTOMÁTICAMENTE DESDE EL REPOSITORIO
+# CARGAR CATÁLOGO Y NORMALIZAR COLUMNAS
 df_db = None
 if os.path.exists(ARCHIVO_CATALOGO):
   try:
     df_db = pd.read_excel(ARCHIVO_CATALOGO)
+    df_db.columns = df_db.columns.str.strip()
   except Exception as e:
     st.error(f"Error al leer el catálogo automático: {e}")
 
-# Opción en barra lateral por si deseas actualizarlo manualmente después
+# Opción en barra lateral para actualizar manualmente
 st.sidebar.header("⚙️ Panel de Administración")
 archivo_catalogo_nuevo = st.sidebar.file_uploader(
     "Actualizar Catálogo Excel", type=["xlsx"]
 )
 if archivo_catalogo_nuevo is not None:
   df_db = pd.read_excel(archivo_catalogo_nuevo)
+  df_db.columns = df_db.columns.str.strip()
   st.sidebar.success("¡Catálogo actualizado correctamente!")
 
 # PESTAÑAS PRINCIPALES
@@ -99,27 +101,31 @@ with tab1:
   )
 
   if df_db is not None:
+    # Nombres exactos de tus columnas en el Excel
+    col_planta = "Planta"
+    col_tipo = "Tipo de material"
+    col_material = "Material"
+    col_proveedor = "Proveedor"
+
     with st.form("form_operador", clear_on_submit=False):
       st.subheader("1. Selección de Material")
       col1, col2 = st.columns(2)
 
       with col1:
-        plantas = df_db["Planta"].dropna().unique()
+        plantas = df_db[col_planta].dropna().unique()
         planta_sel = st.selectbox("Planta", plantas)
 
         tipos_material = (
-            df_db[df_db["Planta"] == planta_sel]["TipoMaterial"]
-            .dropna()
-            .unique()
+            df_db[df_db[col_planta] == planta_sel][col_tipo].dropna().unique()
         )
         tipo_mat_sel = st.selectbox("Tipo de Material", tipos_material)
 
       with col2:
         materiales = (
             df_db[
-                (df_db["Planta"] == planta_sel)
-                & (df_db["TipoMaterial"] == tipo_mat_sel)
-            ]["NombreMaterial"]
+                (df_db[col_planta] == planta_sel)
+                & (df_db[col_tipo] == tipo_mat_sel)
+            ][col_material]
             .dropna()
             .unique()
         )
@@ -127,10 +133,10 @@ with tab1:
 
         proveedores_disponibles = (
             df_db[
-                (df_db["Planta"] == planta_sel)
-                & (df_db["TipoMaterial"] == tipo_mat_sel)
-                & (df_db["NombreMaterial"] == material_sel)
-            ]["Proveedor"]
+                (df_db[col_planta] == planta_sel)
+                & (df_db[col_tipo] == tipo_mat_sel)
+                & (df_db[col_material] == material_sel)
+            ][col_proveedor]
             .dropna()
             .unique()
         )
@@ -200,8 +206,8 @@ with tab1:
         guardar_pendientes(df_p)
 
         st.success(
-            "¡Registro enviado exitosamente al panel de control de calidad para"
-            " su validación y firma!"
+            "¡Registro enviado exitosamente al panel de control de calidad"
+            " para su validación y firma!"
         )
   else:
     st.warning(
@@ -221,13 +227,10 @@ with tab2:
       " oficial de carpetas."
   )
 
-  # Sistema de Clave de Seguridad para el Panel de Calidad
   clave_ingresada = st.text_input(
       "Contraseña de Supervisor de Calidad", type="password"
   )
-  CLAVE_SUPERVISOR = (
-      "1234"  # Puedes cambiar la contraseña aquí cuando gustes
-  )
+  CLAVE_SUPERVISOR = "1234"
 
   if clave_ingresada == CLAVE_SUPERVISOR:
     st.success("🔓 Acceso de supervisor autorizado.")
@@ -279,7 +282,6 @@ with tab2:
               )
             else:
               with st.spinner("Generando carpetas y archivos oficiales..."):
-                # Jerarquía exacta: Planta -> TipoMaterial -> NombreMaterial -> Lote_Nombre
                 carpeta_base = "./Registros_Oficiales"
                 subcarpeta_lote = (
                     f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(
