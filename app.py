@@ -119,16 +119,19 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO)
 # ------------------------------------------
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
-    """Dibuja opciones de manera estricta dentro del ancho asignado (95mm para las preguntas)."""
+    """Dibuja opciones distribuidas exactamente en el espacio reservado (55mm)."""
     curr_x = x_start
-    ancho_bloque = 95.0 / len(opts)
+    ancho_bloque = 55.0 / len(opts)
     for i, opt in enumerate(opts):
         pdf.set_xy(curr_x, y)
         pdf.set_font('Arial', '', 7)
-        w_text = pdf.get_string_width(opt) + 1
-        pdf.cell(w_text, h_row, opt, 0, 0, 'R')
+        w_text = pdf.get_string_width(opt)
         
-        box_x = curr_x + w_text + 1.5
+        # Desplazar ligeramente a la izquierda el texto para evitar que colisione con la caja
+        pdf.set_xy(curr_x, y)
+        pdf.cell(ancho_bloque - 4, h_row, opt, 0, 0, 'R')
+        
+        box_x = curr_x + ancho_bloque - 3.5
         box_y = y + (h_row - 3) / 2
         pdf.rect(box_x, box_y, 3, 3)
         if i == idx_checked:
@@ -138,7 +141,6 @@ def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
         curr_x += ancho_bloque
 
 def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
-    # Ancho total útil: 277 mm (A4 Horizontal con 10mm de margen a cada lado)
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     pdf.set_auto_page_break(auto=False)
@@ -278,19 +280,18 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     for num, preg, opts, val_esp, accion in preguntas_mat:
         y_curr = pdf.get_y()
-        # Estructura fija de celdas absolutas para garantizar 0 desfases
         pdf.set_xy(10, y_curr)
         pdf.set_font('Arial', 'B', 7)
         pdf.cell(5, h_row, num, 1, 0, 'C')
         pdf.set_font('Arial', '', 7)
         pdf.cell(130, h_row, preg, 1, 0, 'L')
-        pdf.cell(55, h_row, '', 1, 0) # Celda contenedora de opciones
+        pdf.cell(55, h_row, '', 1, 0)
         
         idx_chk = 0 
         if num == "4":
             idx_chk = 0 if criticidad=="I" else (1 if criticidad=="II" else 2)
             
-        dibujar_opciones_bloque(pdf, 148, y_curr, h_row, opts, idx_chk)
+        dibujar_opciones_bloque(pdf, 145, y_curr, h_row, opts, idx_chk)
 
         pdf.set_xy(200, y_curr)
         pdf.set_font('Arial', 'B', 7)
@@ -312,13 +313,13 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(87, h_row, '', 0, 1)
 
     preguntas_trans = [
-        ("10", "¿Se encuentra el transporte libre de plagas?", "SI", "Rechazar lote y emitir reclamo"),
-        ("11", "¿El techo, paredes o lona se encuentran íntegras?", "SI", "Rechazar lote y emitir reclamo"),
-        ("12", "¿El techo, paredes o lona se encuentran limpios?", "SI", "Rechazar lote y emitir reclamo"),
-        ("13", "¿El piso del transporte está limpio y en buenas condiciones?", "SI", "Emitir reclamo")
+        ("10", "¿Se encuentra el transporte libre de plagas?", ["SI", "NO"], "SI", "Rechazar lote y emitir reclamo"),
+        ("11", "¿El techo, paredes o lona se encuentran íntegras?", ["SI", "NO"], "SI", "Rechazar lote y emitir reclamo"),
+        ("12", "¿El techo, paredes o lona se encuentran limpios?", ["SI", "NO"], "SI", "Rechazar lote y emitir reclamo"),
+        ("13", "¿El piso del transporte está limpio y en buenas condiciones?", ["SI", "NO"], "SI", "Emitir reclamo")
     ]
 
-    for num, preg, val_esp, accion in preguntas_trans:
+    for num, preg, opts, val_esp, accion in preguntas_trans:
         y_curr = pdf.get_y()
         pdf.set_xy(10, y_curr)
         pdf.set_font('Arial', 'B', 7)
@@ -327,7 +328,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.cell(130, h_row, preg, 1, 0, 'L')
         pdf.cell(55, h_row, '', 1, 0)
         
-        dibujar_opciones_bloque(pdf, 148, y_curr, h_row, ["SI", "NO"], 0)
+        dibujar_opciones_bloque(pdf, 145, y_curr, h_row, opts, 0)
 
         pdf.set_xy(200, y_curr)
         pdf.set_font('Arial', 'B', 7)
@@ -348,7 +349,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(55, h_row, '', 'LTR', 0)
     
     idx_temp = 2 if (temp_trans == "N/A" and temp_mat == "N/A") else 0
-    dibujar_opciones_bloque(pdf, 148, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
+    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
     
     pdf.set_xy(200, y_curr)
     pdf.set_font('Arial', 'B', 7)
@@ -375,7 +376,7 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
     pdf.cell(55, h_row, '', 1, 0)
     
-    dibujar_opciones_bloque(pdf, 148, y_curr, h_row, ["SI", "NO"], 0) 
+    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO"], 0) 
     
     pdf.set_xy(200, y_curr)
     pdf.set_font('Arial', 'B', 7)
