@@ -69,7 +69,7 @@ if not st.session_state.autenticado:
                 else:
                     st.error("❌ Contraseña incorrecta. Intente nuevamente.")
     
-    st.stop()  # Detiene la ejecución hasta que se autentique correctamente
+    st.stop()
 
 # --- TÍTULO PRINCIPAL DESPUÉS DE INGRESAR ---
 st.title("📦 Sistema de Trazabilidad y Control de Calidad - LIF")
@@ -79,9 +79,6 @@ st.markdown("---")
 # FUNCIONES DE DATOS, FIRMAS Y CORREO OUTLOOK
 # ------------------------------------------
 def enviar_notificacion_outlook(asunto, cuerpo_mensaje):
-    """
-    Envía notificación por Outlook a carreaga@lifbrands.co
-    """
     remitente = CORREO_NOTIFICACION
     password = "tu_contraseña_o_app_password"  # Reemplaza con tu contraseña o App Password de Outlook
     destinatario = CORREO_NOTIFICACION
@@ -119,6 +116,11 @@ def cargar_pendientes():
         df[col] = ""
       else:
         df[col] = df[col].astype(str)
+    
+    # Ordenar por fecha de ingreso (más reciente primero)
+    if "Fecha" in df.columns and not df.empty:
+      df = df.sort_values(by="Fecha", ascending=False).reset_index(drop=True)
+      
     return df
   else:
     return pd.DataFrame(columns=[
@@ -290,6 +292,11 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
+    # Marchamo
+    pdf.set_xy(10, y_start)
+    pdf.cell(5, h_row, '1', 0, 0, 'C')
+    pdf.cell(42, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
+    
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
     dibujar_opciones_cabecera(pdf, 54, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
@@ -298,6 +305,10 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
     pdf.cell(55, h_row, str(row.get('Marchamo', '')), 'B', 0, 'C')
 
+    # Candado
+    pdf.set_xy(115, y_start + h_row/2)
+    pdf.cell(5, h_row, '2', 0, 0, 'C')
+    pdf.cell(42, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
     idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
     dibujar_opciones_cabecera(pdf, 155, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
@@ -588,11 +599,11 @@ with tab1:
 
       s1, s2, s3 = st.columns(3)
       with s1:
-        ingreso_sap = st.date_input("Fecha de Ingreso a SAP")
+        ingreso_sap = st.date_input("Fecha de Ingreso")
       with s2:
-        doc_sap = st.text_input("No. Documento SAP")
+        doc_sap = st.text_input("No. Documento SAP", disabled=True, value="")
       with s3:
-        marchamo = st.text_input("No. de Marchamo")
+        marchamo = st.text_input("No. de Marchamo", disabled=True, value="")
 
       m1, m2 = st.columns(2)
       with m1:
@@ -635,7 +646,9 @@ with tab1:
         st.warning("⚠️ Es obligatorio adjuntar el archivo del certificado.")
       else:
         os.makedirs("temp_certificados", exist_ok=True)
-        ruta_cert_temp = os.path.join("temp_certificados", certificado_file.name)
+        # Nombre único con marca de tiempo para evitar sobreescritura
+        nombre_archivo_unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{certificado_file.name}"
+        ruta_cert_temp = os.path.join("temp_certificados", nombre_archivo_unico)
         with open(ruta_cert_temp, "wb") as f:
           f.write(certificado_file.getbuffer())
 
@@ -648,15 +661,23 @@ with tab1:
             "TempTransporte": temp_trans, "TempMaterial": temp_mat,
             "Produccion": str(fecha_produccion), "Vencimiento": str(fecha_vencimiento),
             "Criticidad": criticidad_val, "RutaTemp": ruta_cert_temp,
+            "NombreCertificado": certificado_file.name
         }
         st.session_state.items_ingreso_actual.append(nuevo_item)
-        st.success("✅ ¡Producto agregado!")
+        st.success("✅ ¡Producto agregado y certificado cargado correctamente!")
 
     if len(st.session_state.items_ingreso_actual) > 0:
       st.markdown("---")
-      st.subheader("📋 Resumen de Productos")
-      df_carrito = pd.DataFrame(st.session_state.items_ingreso_actual)
-      st.dataframe(df_carrito[["Planta", "NombreMaterial", "FacturaGuia", "Lote", "Cantidad"]], use_container_width=True)
+      st.subheader("📋 Resumen de Productos Agregados")
+      
+      # Mini apartado detallado por producto con indicador de certificado cargado
+      for idx, item in enumerate(st.session_state.items_ingreso_actual):
+          st.markdown(f"""
+          <div style='background-color: #eef2f7; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #0066cc;'>
+              <b>#{idx+1} - {item['NombreMaterial']}</b> | Proveedor: {item['Proveedor']} | Lote: {item['Lote']} | Cantidad: {item['Cantidad']} {item['Unidad']}<br>
+              <span style='color: #0d6efd; font-size: 0.9rem;'>✅ Certificado cargado correctamente: <b>{item['NombreCertificado']}</b></span>
+          </div>
+          """, unsafe_allow_html=True)
 
       item_a_borrar = st.selectbox(
           "Quitar producto de la lista actual:",
@@ -669,7 +690,7 @@ with tab1:
 
       st.markdown("---")
       st.subheader("3. Finalizar y Enviar a Revisión")
-      responsable = st.text_input("Operador Responsable")
+      responsable = st.selectbox("Operador Responsable", ["Carlos López", "Carlos Gallardo", "Willy", "Ronald"])
       
       st.write("✍️ **Dibuja tu Firma de Operador:**")
       canvas_op = None
@@ -677,49 +698,45 @@ with tab1:
           canvas_op = st_canvas(stroke_width=2, stroke_color="#000", background_color="#ffffff", height=100, width=400, drawing_mode="freedraw", key="firma_op")
 
       if st.button("🚀 Enviar a Calidad", type="primary"):
-        if not responsable:
-          st.error("⚠️ Ingresa el nombre del operador responsable.")
-        else:
-          ruta_firma_op = guardar_firma(canvas_op, "firma_op")
+        ruta_firma_op = guardar_firma(canvas_op, "firma_op")
 
-          df_p = cargar_pendientes()
-          nuevo_id = int(df_p["ID"].max()) + 1 if not df_p.empty and not pd.isna(df_p["ID"].max()) else 1
+        df_p = cargar_pendientes()
+        nuevo_id = int(df_p["ID"].max()) + 1 if not df_p.empty and not pd.isna(df_p["ID"].max()) else 1
 
-          for item in st.session_state.items_ingreso_actual:
-            nuevo_registro = {
-                "ID": nuevo_id, "Planta": str(item["Planta"]), "TipoMaterial": str(item["TipoMaterial"]),
-                "NombreMaterial": str(item["NombreMaterial"]), "Proveedor": str(item["Proveedor"]),
-                "FacturaGuia": str(item["FacturaGuia"]), "Transporte": str(item["Transporte"]),
-                "Placa": str(item["Placa"]), "IngresoSAP": str(item["IngresoSAP"]), "DocSAP": str(item["DocSAP"]),
-                "EstadoMarchamo": str(item["EstadoMarchamo"]), "Marchamo": str(item["Marchamo"]),
-                "EstadoCandado": str(item["EstadoCandado"]), "LoteProveedor": str(item["Lote"]),
-                "Cantidad": item["Cantidad"], "Unidad": str(item["Unidad"]), 
-                "TempTransporte": str(item["TempTransporte"]), "TempMaterial": str(item["TempMaterial"]),
-                "FechaProduccion": str(item["Produccion"]), "FechaVencimiento": str(item["Vencimiento"]),
-                "Criticidad": str(item["Criticidad"]), "Responsable": str(responsable),
-                "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "Estado": "Pendiente", "FirmaCalidad": "Sin firmar",
-                "RutaCarpeta": "", "RutaChecklistOficial": "", "RutaPdfCert": str(item["RutaTemp"]),
-                "RutaFirmaOp": ruta_firma_op, "RutaFirmaSup": ""
-            }
-            df_p = pd.concat([df_p, pd.DataFrame([nuevo_registro])], ignore_index=True)
-            nuevo_id += 1
+        for item in st.session_state.items_ingreso_actual:
+          nuevo_registro = {
+              "ID": nuevo_id, "Planta": str(item["Planta"]), "TipoMaterial": str(item["TipoMaterial"]),
+              "NombreMaterial": str(item["NombreMaterial"]), "Proveedor": str(item["Proveedor"]),
+              "FacturaGuia": str(item["FacturaGuia"]), "Transporte": str(item["Transporte"]),
+              "Placa": str(item["Placa"]), "IngresoSAP": str(item["IngresoSAP"]), "DocSAP": str(item["DocSAP"]),
+              "EstadoMarchamo": str(item["EstadoMarchamo"]), "Marchamo": str(item["Marchamo"]),
+              "EstadoCandado": str(item["EstadoCandado"]), "LoteProveedor": str(item["Lote"]),
+              "Cantidad": item["Cantidad"], "Unidad": str(item["Unidad"]), 
+              "TempTransporte": str(item["TempTransporte"]), "TempMaterial": str(item["TempMaterial"]),
+              "FechaProduccion": str(item["Produccion"]), "FechaVencimiento": str(item["Vencimiento"]),
+              "Criticidad": str(item["Criticidad"]), "Responsable": str(responsable),
+              "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "Estado": "Pendiente", "FirmaCalidad": "Sin firmar",
+              "RutaCarpeta": "", "RutaChecklistOficial": "", "RutaPdfCert": str(item["RutaTemp"]),
+              "RutaFirmaOp": ruta_firma_op, "RutaFirmaSup": ""
+          }
+          df_p = pd.concat([df_p, pd.DataFrame([nuevo_registro])], ignore_index=True)
+          nuevo_id += 1
 
-          guardar_pendientes(df_p)
-          
-          # Envío de notificación automática vía Outlook a carreaga@lifbrands.co
-          asunto_mail = "🚨 Nuevo Material Pendiente de Revisión - Sistema LIF"
-          cuerpo_mail = f"Se ha enviado un nuevo lote de material para revisión en el sistema LIF.\n\nOperador responsable: {responsable}\nFecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\nPor favor ingrese al sistema para su verificación y aprobación."
-          enviar_notificacion_outlook(asunto_mail, cuerpo_mail)
+        guardar_pendientes(df_p)
+        
+        asunto_mail = "🚨 Nuevo Material Pendiente de Revisión - Sistema LIF"
+        cuerpo_mail = f"Se ha enviado un nuevo lote de material para revisión en el sistema LIF.\n\nOperador responsable: {responsable}\nFecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\nPor favor ingrese al sistema para su verificación y aprobación."
+        enviar_notificacion_outlook(asunto_mail, cuerpo_mail)
 
-          st.session_state.items_ingreso_actual = []
-          st.success("🎉 ¡Enviados a calidad con éxito y notificación enviada!")
-          st.rerun()
+        st.session_state.items_ingreso_actual = []
+        st.success("🎉 ¡Enviados a calidad con éxito y notificación enviada!")
+        st.rerun()
 
   else:
     st.warning("⚠️ Sube el catálogo maestro.")
 
 # ------------------------------------------
-# PESTAÑA 2: PANEL DE CALIDAD Y FIRMA (SIN CONTRASEÑAS INTERMEDIAS)
+# PESTAÑA 2: PANEL DE CALIDAD Y FIRMA
 # ------------------------------------------
 with tab2:
   st.header("✍️ Panel de Control y Firma")
@@ -731,12 +748,12 @@ with tab2:
     st.info("No hay registros pendientes.")
   else:
     for index, row in pendientes.iterrows():
-      with st.expander(f"📥 ID #{row['ID']} | Planta: {row.get('Planta', 'N/A')} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']}"):
+      with st.expander(f"📥 ID #{row['ID']} | Planta: {row.get('Planta', 'N/A')} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Ingreso: {row['Fecha']}"):
         st.write(f"**Operador Responsable:** {row['Responsable']}")
         if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
           st.write("📄 Certificado adjunto.")
 
-        nombre_supervisor = st.text_input("Nombre del Supervisor", key=f"sup_nom_{row['ID']}")
+        nombre_supervisor = st.text_input("Nombre del Supervisor", value="Carlos López", key=f"sup_nom_{row['ID']}")
         st.write("✍️ **Dibuja tu Firma de Supervisor:**")
         
         canvas_sup = None
