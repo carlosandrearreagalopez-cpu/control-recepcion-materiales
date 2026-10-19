@@ -50,7 +50,6 @@ def cargar_pendientes():
         "Proveedor",
         "LoteProveedor",
         "FacturaGuia",
-        "Transporte",
         "Placa",
         "Unidad",
         "Temperatura",
@@ -80,7 +79,6 @@ def cargar_pendientes():
         "Proveedor",
         "LoteProveedor",
         "FacturaGuia",
-        "Transporte",
         "Placa",
         "Cantidad",
         "Unidad",
@@ -137,8 +135,8 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
   st.header("Formulario de Recepción de Materiales")
   st.markdown(
-      "Complete los datos de transporte, factura, lote y seleccione los"
-      " productos adjuntando su certificado."
+      "Complete los datos de factura, placa, lote y agregue los productos"
+      " junto con su certificado."
   )
 
   if df_db is not None:
@@ -186,17 +184,13 @@ with tab1:
     )
 
     with st.form("form_item_recepcion"):
-      st.subheader("2. Datos de Transporte, Factura y Lote")
-      t1, t2, t3 = st.columns(3)
+      st.subheader("2. Datos de Factura, Transporte y Lote")
+      t1, t2 = st.columns(2)
       with t1:
         factura_guia = st.text_input(
             "No. de Factura y/o Guía", placeholder="Ej. FAC-12345"
         )
       with t2:
-        nombre_transporte = st.text_input(
-            "Nombre del Transporte", placeholder="Ej. Transportes S.A."
-        )
-      with t3:
         placa_transporte = st.text_input(
             "Placa del Transporte", placeholder="Ej. C-123ABC"
         )
@@ -265,7 +259,6 @@ with tab1:
             "Proveedor": proveedor_sel,
             "NombreMaterial": material_sel,
             "FacturaGuia": factura_guia,
-            "Transporte": nombre_transporte,
             "Placa": placa_transporte,
             "Lote": lote_proveedor,
             "Cantidad": cantidad,
@@ -299,7 +292,6 @@ with tab1:
           use_container_width=True,
       )
 
-      # Opción para eliminar un ítem específico del carrito actual
       item_a_borrar = st.selectbox(
           "Seleccione un producto para quitar de la lista actual",
           options=range(len(st.session_state.items_ingreso_actual)),
@@ -338,7 +330,6 @@ with tab1:
                 "NombreMaterial": str(item["NombreMaterial"]),
                 "Proveedor": str(item["Proveedor"]),
                 "FacturaGuia": str(item["FacturaGuia"]),
-                "Transporte": str(item["Transporte"]),
                 "Placa": str(item["Placa"]),
                 "LoteProveedor": str(item["Lote"]),
                 "Cantidad": item["Cantidad"],
@@ -380,8 +371,8 @@ with tab2:
   st.header("✍️ Panel de Control y Firma de Calidad")
   st.markdown(
       "Espacio exclusivo para supervisores. Ingrese su contraseña, revise los"
-      " datos, apruebe para rellenar el checklist o elimine registros"
-      " incorrectos."
+      " datos, apruebe para rellenar campo por campo su checklist de Excel o"
+      " elimine registros."
   )
 
   clave_ingresada = st.text_input(
@@ -409,7 +400,7 @@ with tab2:
             st.write(f"**Planta:** {row['Planta']}")
             st.write(f"**Proveedor:** {row['Proveedor']}")
             st.write(f"**Factura / Guía:** {row['FacturaGuia']}")
-            st.write(f"**Transporte:** {row['Transporte']} (Placa: {row['Placa']})")
+            st.write(f"**Placa de Transporte:** {row['Placa']}")
           with c2:
             st.write(f"**Cantidad:** {row['Cantidad']} {row['Unidad']}")
             st.write(f"**Prod. / Venc.:** {row['FechaProduccion']} al {row['FechaVencimiento']}")
@@ -423,7 +414,6 @@ with tab2:
             else:
               st.write("📄 Certificado PDF adjunto disponible.")
 
-          # Botón o formulario de aprobación y opción de eliminar
           col_btn1, col_btn2 = st.columns(2)
           
           with col_btn1:
@@ -432,14 +422,14 @@ with tab2:
                   "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
               )
               aprobar = st.form_submit_button(
-                  "Aprobar y Rellenar Checklist 🛡️", type="primary"
+                  "Aprobar y Rellenar Checklist Oficial 🛡️", type="primary"
               )
 
             if aprobar:
               if not nombre_supervisor:
                 st.error("Debe ingresar su nombre para firmar.")
               else:
-                with st.spinner("Generando documentos oficiales..."):
+                with st.spinner("Rellenando checklist oficial y guardando..."):
                   carpeta_base = "./Registros_Oficiales"
                   subcarpeta_lote = (
                       f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(
@@ -474,7 +464,7 @@ with tab2:
                   ):
                     shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
 
-                  # 2. Rellenar Excel oficial
+                  # 2. Rellenar Excel oficial campo por campo
                   prefijo_archivo = (
                       f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                           " ", "_"
@@ -496,20 +486,24 @@ with tab2:
                     wb = openpyxl.load_workbook(ruta_plantilla)
                     ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
                     
-                    ws['C5'] = row['Fecha']
-                    ws['C16'] = row['Proveedor']
-                    ws['C17'] = row['NombreMaterial']
-                    ws['C18'] = float(row['Cantidad']) if pd.notna(row['Cantidad']) else 0.0
-                    ws['C19'] = row['Unidad']
-                    ws['C20'] = row['LoteProveedor']
-                    ws['C21'] = row['FechaProduccion']
-                    ws['C22'] = row['FechaVencimiento']
+                    # Mapeo exacto campo por campo basado en tu formato oficial
+                    ws['C5'] = row['Fecha']                   # Fecha de recepción
+                    ws['D6'] = row['Proveedor']               # Nombre del transporte (igual al proveedor)
+                    ws['D7'] = row['Placa']                   # Placa del transporte
+                    ws['D5'] = row['FacturaGuia']             # Número de factura y/o guía del proveedor
+                    ws['C16'] = row['Proveedor']              # Proveedor
+                    ws['C17'] = row['NombreMaterial']         # Material
+                    ws['C18'] = float(row['Cantidad']) if pd.notna(row['Cantidad']) else 0.0 # Cantidad
+                    ws['C19'] = row['Unidad']                 # Unidad de medida
+                    ws['C20'] = row['LoteProveedor']          # Lote
+                    ws['C21'] = row['FechaProduccion']        # Fecha de Producción
+                    ws['C22'] = row['FechaVencimiento']       # Fecha de Vencimiento
                     
                     if str(row['Temperatura']) != "N/A":
-                      ws['D39'] = float(row['Temperatura'])
+                      ws['D39'] = float(row['Temperatura'])   # Temperatura del material
                     
-                    ws['C51'] = row['Responsable']
-                    ws['C53'] = nombre_supervisor
+                    ws['C51'] = row['Responsable']            # Persona que realiza la recepción
+                    ws['C53'] = nombre_supervisor             # Firma / Vº Bº Calidad
 
                     wb.save(ruta_excel_final)
                   else:
@@ -531,7 +525,7 @@ with tab2:
                   )
                   guardar_pendientes(df_p)
 
-                  st.success("🎉 ¡Aprobado y guardado con éxito!")
+                  st.success("🎉 ¡Aprobado y Checklist de Excel completado con éxito!")
                   st.rerun()
 
           with col_btn2:
@@ -539,7 +533,7 @@ with tab2:
             if st.button("🗑️ Eliminar Registro Pendiente", key=f"del_pend_{row['ID']}"):
               df_p = df_p[df_p["ID"] != row["ID"]]
               guardar_pendientes(df_p)
-              st.warning("⚠️ Registro eliminado del sistema.")
+              st.warning("⚠️ Registro pendiente eliminado.")
               st.rerun()
 
   elif clave_ingresada == "":
@@ -592,6 +586,7 @@ with tab3:
             "NombreMaterial",
             "Proveedor",
             "FacturaGuia",
+            "Placa",
             "LoteProveedor",
             "Cantidad",
             "Unidad",
