@@ -181,7 +181,7 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
 # ------------------------------------------
 # MOTOR DE GENERACIÓN PDF (DISEÑO MILIMÉTRICO CORREGIDO)
 # ------------------------------------------
-def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
+def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked, step=13.5):
     curr_x = x_start
     for i, opt in enumerate(opts):
         pdf.set_font('Arial', '', 7)
@@ -194,7 +194,7 @@ def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked):
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
             pdf.cell(3, 3, 'X', 0, 0, 'C')
-        curr_x += 13.5  # Espaciado compacto para mantener las opciones dentro del recuadro
+        curr_x += step
 
 def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
     n = len(opts)
@@ -292,27 +292,27 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo (Pregunta 1) - Opciones ajustadas exactamente a x=69 para no superponerse con el texto y quedar dentro del recuadro
+    # Marchamo (Pregunta 1)
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
-    pdf.cell(55, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
+    pdf.cell(54, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
     
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
-    dibujar_opciones_cabecera(pdf, 69, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
+    dibujar_opciones_cabecera(pdf, 69, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m, step=12.0)
 
     pdf.set_xy(15, y_start + h_row)
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
     val_marchamo = str(row.get('Marchamo', ''))
     pdf.cell(55, h_row, val_marchamo if val_marchamo != 'nan' else '', 'B', 0, 'C')
 
-    # Candado (Pregunta 2) - Opciones ajustadas exactamente a x=170 para encajar perfecto
+    # Candado (Pregunta 2) - Celda de texto ajustada a 47mm y opciones compactas en x=163 con step=12.0 para que N/A quede dentro del cuadro (hasta 200mm)
     pdf.set_xy(115, y_start + h_row/2)
     pdf.cell(5, h_row, '2', 0, 0, 'C')
-    pdf.cell(52, h_row, '¿El candado se encuentra alterado?', 0, 0)
+    pdf.cell(43, h_row, '¿El candado se encuentra alterado?', 0, 0)
     est_can = str(row.get('EstadoCandado', 'N/A'))
     idx_c = 0 if est_can == 'SI' else (1 if est_can == 'NO' else 2)
-    dibujar_opciones_cabecera(pdf, 170, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c)
+    dibujar_opciones_cabecera(pdf, 163, y_start + h_row/2, h_row, ['SI', 'NO', 'N/A'], idx_c, step=12.0)
 
     pdf.set_xy(200, y_start + h_row/2)
     pdf.set_font('Arial', 'B', 7)
