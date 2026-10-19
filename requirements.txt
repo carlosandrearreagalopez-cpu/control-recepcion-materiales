@@ -1,4 +1,6 @@
 streamlit
 pandas
 openpyxl
-fpdf
+fpdf2
+numpy
+Pillow
