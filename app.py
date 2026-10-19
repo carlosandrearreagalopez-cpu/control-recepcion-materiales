@@ -69,6 +69,11 @@ def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
 
+# Inicializar la lista temporal en la sesión para el carrito de ingresos múltiples
+if "items_ingreso_actual" not in st.session_state:
+  st.session_state.items_ingreso_actual = []
+
+
 # Cargar catálogo maestro
 df_db = None
 if os.path.exists(ARCHIVO_CATALOGO):
@@ -99,8 +104,8 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
   st.header("Formulario de Recepción de Materiales")
   st.markdown(
-      "Complete la información correspondiente al checklist de ingreso y"
-      " adjunte el certificado oficial."
+      "Selecciona la planta, el tipo de material, el proveedor y agrega los"
+      " productos que trae en este ingreso."
   )
 
   if df_db is not None:
@@ -112,67 +117,61 @@ with tab1:
         "Criticidad" if "Criticidad" in df_db.columns else None
     )
 
-    with st.form("form_operador", clear_on_submit=False):
-      st.subheader("1. Jerarquía y Selección de Material")
+    # 1. Jerarquía Principal: Planta -> Tipo de Material -> Proveedor -> Material
+    plantas = df_db[col_planta].dropna().unique()
+    planta_sel = st.selectbox("Planta", plantas)
 
-      # Nivel 1: Selección de Planta
-      plantas = df_db[col_planta].dropna().unique()
-      planta_sel = st.selectbox("Planta", plantas)
+    df_planta = df_db[df_db[col_planta] == planta_sel]
 
-      # Filtrar estrictamente por la Planta seleccionada
-      df_planta = df_db[df_db[col_planta] == planta_sel]
+    col1, col2 = st.columns(2)
+    with col1:
+      tipos_material = df_planta[col_tipo].dropna().unique()
+      tipo_mat_sel = st.selectbox("Tipo de Material", tipos_material)
+      df_tipo = df_planta[df_planta[col_tipo] == tipo_mat_sel]
 
-      col1, col2 = st.columns(2)
+    with col2:
+      # Proveedor primero para agrupar
+      proveedores_disponibles = df_tipo[col_proveedor].dropna().unique()
+      proveedor_sel = st.selectbox("Proveedor", proveedores_disponibles)
+      df_prov = df_tipo[df_tipo[col_proveedor] == proveedor_sel]
 
-      with col1:
-        # Nivel 2: Tipo de Material exclusivo de la planta seleccionada
-        tipos_material = df_planta[col_tipo].dropna().unique()
-        tipo_mat_sel = st.selectbox("Tipo de Material", tipos_material)
+    # Materiales que ofrece este proveedor en este tipo y planta
+    materiales_disponibles = df_prov[col_material].dropna().unique()
+    material_sel = st.selectbox(
+        "Nombre del Material (Producto)", materiales_disponibles
+    )
 
-        # Filtrar por Planta y Tipo de Material
-        df_tipo = df_planta[df_planta[col_tipo] == tipo_mat_sel]
+    df_material = df_prov[df_prov[col_material] == material_sel]
+    criticidad_val = "N/A"
+    if col_criticidad and not df_material.empty:
+      criticidad_val = str(df_material.iloc[0][col_criticidad])
 
-      with col2:
-        # Nivel 3: Nombre del Material exclusivo de la planta y tipo seleccionados
-        materiales = df_tipo[col_material].dropna().unique()
-        material_sel = st.selectbox("Nombre del Material", materiales)
+    st.info(f"🏷️ **Criticidad Asociada al Material:** {criticidad_val}")
 
-        # Filtrar por Planta, Tipo y Material seleccionado para obtener sus proveedores
-        df_material = df_tipo[df_tipo[col_material] == material_sel]
-        proveedores_disponibles = df_material[col_proveedor].dropna().unique()
-        proveedor_sel = st.selectbox("Proveedor", proveedores_disponibles)
-
-      # Obtener criticidad automática del material seleccionado
-      criticidad_val = "N/A"
-      if col_criticidad and not df_material.empty:
-        criticidad_val = str(df_material.iloc[0][col_criticidad])
-
-      st.info(f"🏷️ **Criticidad Asociada al Material:** {criticidad_val}")
-
-      st.markdown("---")
-      st.subheader("2. Datos de Lote, Cantidad y Fechas")
-      col3, col4, col5 = st.columns(3)
-      with col3:
+    # Formulario para capturar los datos específicos del ítem actual
+    with st.form("form_item_recepcion"):
+      st.subheader("2. Datos del Lote y Cantidades")
+      c3, c4, c5 = st.columns(3)
+      with c3:
         lote_proveedor = st.text_input(
             "Lote del Proveedor", placeholder="Ej. LOTE-98765"
         )
-      with col4:
+      with c4:
         cantidad = st.number_input(
             "Cantidad Recibida", min_value=0.0, format="%.2f"
         )
-      with col5:
+      with c5:
         unidad = st.selectbox(
             "Unidad de Medida",
             ["Kg", "Litros", "Unidades", "Toneladas", "Galones", "Cajas"],
         )
 
-      col6, col7 = st.columns(2)
-      with col6:
+      c6, c7 = st.columns(2)
+      with c6:
         fecha_produccion = st.date_input("Fecha de Producción")
-      with col7:
+      with c7:
         fecha_vencimiento = st.date_input("Fecha de Vencimiento / Caducidad")
 
-      # Control de Temperatura condicional si es materia prima, concentrado o pulpa
       temperatura = "N/A"
       if (
           "materia prima" in str(tipo_mat_sel).lower()
@@ -180,84 +179,113 @@ with tab1:
           or "pulpa" in str(material_sel).lower()
       ):
         st.markdown("---")
-        st.subheader("❄️ Control de Temperatura (Requerido para Materia Prima)")
+        st.subheader("❄️ Control de Temperatura")
         temperatura = st.number_input(
-            "Temperatura de Recepción (°C)",
-            value=4.0,
-            format="%.1f",
-            help=(
-                "Ingrese la temperatura medida al recibir el concentrado o"
-                " pulpa."
-            ),
+            "Temperatura de Recepción (°C)", value=4.0, format="%.1f"
         )
 
-      st.markdown("---")
-      st.subheader("3. Responsable y Documentación")
-      col8, col9 = st.columns(2)
-      with col8:
-        responsable = st.text_input(
-            "Operador Responsable", placeholder="Tu Nombre"
-        )
-      with col9:
-        certificado_file = st.file_uploader(
-            "Adjuntar Certificado de Calidad (Imagen o PDF)",
-            type=["jpg", "jpeg", "png", "pdf"],
-        )
-
-      st.markdown("")
-      enviar_revision = st.form_submit_button(
-          "Enviar a Revisión de Calidad 🚀", type="primary"
+      agregar_item = st.form_submit_button(
+          "➕ Agregar este producto a la lista de ingreso"
       )
 
-    if enviar_revision:
-      if not lote_proveedor or not responsable:
-        st.error(
-            "⚠️ Por favor, completa el número de lote y el nombre del"
-            " operador."
-        )
-      elif certificado_file is None:
-        st.error(
-            "⚠️ Es obligatorio adjuntar el certificado de calidad en formato"
-            " imagen o PDF."
-        )
+    if agregar_item:
+      if not lote_proveedor:
+        st.warning("⚠️ Debes ingresar el número de lote del proveedor.")
       else:
-        os.makedirs("temp_certificados", exist_ok=True)
-        ruta_cert_temp = os.path.join(
-            "temp_certificados", certificado_file.name
-        )
-        with open(ruta_cert_temp, "wb") as f:
-          f.write(certificado_file.getbuffer())
-
-        df_p = cargar_pendientes()
-        nuevo_id = len(df_p) + 1 if not df_p.empty else 1
-        nuevo_registro = {
-            "ID": nuevo_id,
+        nuevo_item = {
             "Planta": planta_sel,
             "TipoMaterial": tipo_mat_sel,
-            "NombreMaterial": material_sel,
             "Proveedor": proveedor_sel,
-            "LoteProveedor": lote_proveedor,
+            "NombreMaterial": material_sel,
+            "Lote": lote_proveedor,
             "Cantidad": cantidad,
             "Unidad": unidad,
             "Temperatura": temperatura,
-            "FechaProduccion": str(fecha_produccion),
-            "FechaVencimiento": str(fecha_vencimiento),
+            "Produccion": str(fecha_produccion),
+            "Vencimiento": str(fecha_vencimiento),
             "Criticidad": criticidad_val,
-            "Responsable": responsable,
-            "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Estado": "Pendiente",
-            "FirmaCalidad": "Sin firmar",
-            "RutaCarpeta": ruta_cert_temp,
         }
-        df_p = pd.concat(
-            [df_p, pd.DataFrame([nuevo_registro])], ignore_index=True
-        )
-        guardar_pendientes(df_p)
-
+        st.session_state.items_ingreso_actual.append(nuevo_item)
         st.success(
-            "¡Registro enviado exitosamente al panel de control de calidad"
-            " para su validación y firma!"
+            f"✅ ¡Producto '{material_sel}' agregado a la lista temporal!"
         )
+
+    # MOSTRAR LO QUE LLEVA AGREGADO (CARRITO)
+    if len(st.session_state.items_ingreso_actual) > 0:
+      st.markdown("---")
+      st.subheader("📋 Resumen de Productos Agregados en este Ingreso")
+      df_carrito = pd.DataFrame(st.session_state.items_ingreso_actual)
+      st.dataframe(df_carrito, use_container_width=True)
+
+      if st.button("🗑️ Limpiar lista actual"):
+        st.session_state.items_ingreso_actual = []
+        st.rerun()
+
+      st.markdown("---")
+      st.subheader("3. Finalizar y Enviar a Calidad")
+      with st.form("form_finalizar_envio"):
+        responsable = st.text_input(
+            "Operador Responsable", placeholder="Tu Nombre Completo"
+        )
+        certificado_file = st.file_uploader(
+            "Adjuntar Certificado de Calidad del Proveedor (Imagen o PDF)",
+            type=["jpg", "jpeg", "png", "pdf"],
+        )
+        enviar_todo = st.form_submit_button(
+            "🚀 Enviar Todo a Revisión de Calidad", type="primary"
+        )
+
+      if enviar_todo:
+        if not responsable:
+          st.error("⚠️ Por favor ingresa el nombre del operador responsable.")
+        elif certificado_file is None:
+          st.error(
+              "⚠️ Es obligatorio adjuntar el certificado de calidad general o"
+              " del lote."
+          )
+        else:
+          os.makedirs("temp_certificados", exist_ok=True)
+          ruta_cert_temp = os.path.join(
+              "temp_certificados", certificado_file.name
+          )
+          with open(ruta_cert_temp, "wb") as f:
+            f.write(certificado_file.getbuffer())
+
+          df_p = cargar_pendientes()
+          nuevo_id = len(df_p) + 1 if not df_p.empty else 1
+
+          # Guardar cada ítem del carrito como un registro pendiente
+          for item in st.session_state.items_ingreso_actual:
+            nuevo_registro = {
+                "ID": nuevo_id,
+                "Planta": item["Planta"],
+                "TipoMaterial": item["TipoMaterial"],
+                "NombreMaterial": item["NombreMaterial"],
+                "Proveedor": item["Proveedor"],
+                "LoteProveedor": item["Lote"],
+                "Cantidad": item["Cantidad"],
+                "Unidad": item["Unidad"],
+                "Temperatura": item["Temperatura"],
+                "FechaProduccion": item["Produccion"],
+                "FechaVencimiento": item["Vencimiento"],
+                "Criticidad": item["Criticidad"],
+                "Responsable": responsable,
+                "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Estado": "Pendiente",
+                "FirmaCalidad": "Sin firmar",
+                "RutaCarpeta": ruta_cert_temp,
+            }
+            df_p = pd.concat(
+                [df_p, pd.DataFrame([nuevo_registro])], ignore_index=True
+            )
+            nuevo_id += 1
+
+          guardar_pendientes(df_p)
+          st.session_state.items_ingreso_actual = []
+          st.success(
+              "🎉 ¡Todos los productos agregados fueron enviados con éxito al"
+              " panel de calidad!"
+          )
   else:
     st.warning(
         "⚠️ No se detectó automáticamente el catálogo en el repositorio."
@@ -333,7 +361,7 @@ with tab2:
           if aprobar:
             if not nombre_supervisor:
               st.error(
-                  "Debe ingresar su nombre para autorizar y firmar el registro."
+                  "Debe ingresar sus datos para autorizar y firmar el registro."
               )
             else:
               with st.spinner("Generando carpetas y archivos oficiales..."):
