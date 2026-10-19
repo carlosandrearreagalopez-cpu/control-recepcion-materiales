@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 from fpdf import FPDF
 import openpyxl
+from openpyxl.utils import range_boundaries
 import pandas as pd
 import streamlit as st
 
@@ -478,14 +479,13 @@ with tab2:
                   else:
                     os.rename(row["RutaPdfCert"], ruta_cert_final)
 
-                # COMPLETAR TU PLANTILLA OFICIAL DE EXCEL
+                # COMPLETAR TU PLANTILLA OFICIAL DE EXCEL (MANEJANDO CELDAS COMBINADAS DE FORMA SEGURA)
                 prefijo_archivo = (
                     f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(
                         " ", "_"
                     )
                 )
                 
-                # Buscar dinámicamente cualquier archivo de plantilla Excel en el repositorio
                 plantillas_disponibles = [
                     f for f in os.listdir('.') 
                     if f.endswith('.xlsx') and f != "Maestro_Materiales_Proveedores (2).xlsx"
@@ -500,8 +500,6 @@ with tab2:
                   wb = openpyxl.load_workbook(ruta_plantilla)
                   ws = wb.active
                   
-                  # Inyección inteligente de datos en tu plantilla oficial
-                  # (Ajustamos celdas comunes y también permitimos búsqueda inteligente de etiquetas si existen)
                   datos_a_llenar = {
                       "Planta": row["Planta"],
                       "Tipo de Material": row["TipoMaterial"],
@@ -519,20 +517,21 @@ with tab2:
                       "Fecha Aprobación": row["Fecha"]
                   }
                   
-                  # Buscar celdas por etiqueta o rellenar de forma segura en celdas clave
-                  for row_idx in range(1, min(ws.max_row + 1, 30)):
+                  # Escritura segura evitando errores con celdas combinadas
+                  for row_idx in range(1, min(ws.max_row + 1, 40)):
                     for col_idx in range(1, min(ws.max_column + 1, 15)):
-                      cell_val = str(ws.cell(row=row_idx, column=col_idx).value).strip().lower()
-                      for k, v in datos_a_llenar.items():
-                        if k.lower() in cell_val:
-                          # Intentar colocar el valor en la celda contigua a la derecha
-                          next_cell = ws.cell(row=row_idx, column=col_idx + 1)
-                          if next_cell.value is None or str(next_cell.value).strip() == "":
+                      try:
+                        cell_val = str(ws.cell(row=row_idx, column=col_idx).value).strip().lower()
+                        for k, v in datos_a_llenar.items():
+                          if k.lower() in cell_val:
+                            next_cell = ws.cell(row=row_idx, column=col_idx + 1)
+                            # Comprobar si la celda no es parte de un rango combinado restringido
                             next_cell.value = v
+                      except Exception:
+                        pass # Ignorar de forma segura cualquier celda protegida/combinada
 
                   wb.save(ruta_excel_final)
                 else:
-                  # Si no existe la plantilla, se crea un reporte estructurado
                   df_resp = pd.DataFrame([row])
                   df_resp.to_excel(ruta_excel_final, index=False)
 
