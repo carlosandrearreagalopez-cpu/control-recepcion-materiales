@@ -1,9 +1,9 @@
 from datetime import datetime
 import os
 import shutil
-import openpyxl
 import pandas as pd
 import streamlit as st
+from fpdf import FPDF
 
 # Configuración de diseño de página
 st.set_page_config(
@@ -38,17 +38,20 @@ st.markdown("---")
 
 ARCHIVO_PENDIENTES = "registros_pendientes.csv"
 ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
-ARCHIVO_PLANTILLA = "plantilla_maestra_checklist.xlsx"
 
+# ------------------------------------------
+# FUNCIONES DE DATOS Y GENERACIÓN PDF
+# ------------------------------------------
 def cargar_pendientes():
   if os.path.exists(ARCHIVO_PENDIENTES):
     df = pd.read_csv(ARCHIVO_PENDIENTES)
     columnas_texto = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor",
         "LoteProveedor", "FacturaGuia", "Transporte", "Placa",
+        "IngresoSAP", "DocSAP", "Marchamo",
         "Unidad", "Temperatura", "FechaProduccion", "FechaVencimiento",
         "Criticidad", "Responsable", "Fecha", "Estado", "FirmaCalidad",
-        "RutaCarpeta", "RutaExcel", "RutaPdfCert", "RutaChecklistOficial"
+        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert"
     ]
     for col in columnas_texto:
       if col not in df.columns:
@@ -59,20 +62,157 @@ def cargar_pendientes():
   else:
     return pd.DataFrame(columns=[
         "ID", "Planta", "TipoMaterial", "NombreMaterial", "Proveedor",
-        "LoteProveedor", "FacturaGuia", "Transporte", "Placa", "Cantidad",
+        "LoteProveedor", "FacturaGuia", "Transporte", "Placa",
+        "IngresoSAP", "DocSAP", "Marchamo", "Cantidad",
         "Unidad", "Temperatura", "FechaProduccion", "FechaVencimiento",
         "Criticidad", "Responsable", "Fecha", "Estado", "FirmaCalidad",
-        "RutaCarpeta", "RutaExcel", "RutaPdfCert", "RutaChecklistOficial"
+        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert"
     ])
 
 def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
 
-# Inicializar carrito temporal en sesión
+def generar_pdf_ricc14(row, supervisor, ruta_guardado):
+    pdf = FPDF('P', 'mm', 'A4')
+    pdf.add_page()
+    
+    # --- ENCABEZADO ---
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(45, 10, 'Codigo: R ICC-14-1', border=1, align='C')
+    pdf.cell(100, 10, 'Aseguramiento de Calidad', border=1, align='C')
+    pdf.cell(45, 10, 'Version: 5', border=1, align='C', ln=1)
+    
+    pdf.set_font('Arial', 'B', 11)
+    pdf.cell(190, 8, 'Check list de recepcion de materiales', border=1, align='C', ln=1)
+    pdf.ln(3)
+
+    # --- DATOS GENERALES ---
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(35, 6, 'Fecha de recepcion:', border=1)
+    pdf.cell(60, 6, str(row.get('Fecha', '')).split()[0], border=1)
+    pdf.cell(45, 6, 'Factura/Guia del proveedor:', border=1)
+    pdf.cell(50, 6, str(row.get('FacturaGuia', '')), border=1, ln=1)
+    
+    pdf.cell(35, 6, 'Nombre transporte:', border=1)
+    pdf.cell(60, 6, str(row.get('Transporte', '')), border=1)
+    pdf.cell(45, 6, 'Fecha de ingreso a SAP:', border=1)
+    pdf.cell(50, 6, str(row.get('IngresoSAP', 'N/A')), border=1, ln=1)
+
+    pdf.cell(35, 6, 'Placa del transporte:', border=1)
+    pdf.cell(60, 6, str(row.get('Placa', '')), border=1)
+    pdf.cell(45, 6, 'No. Documento SAP:', border=1)
+    pdf.cell(50, 6, str(row.get('DocSAP', 'N/A')), border=1, ln=1)
+    pdf.ln(3)
+
+    # --- MARCHAMO Y CANDADO ---
+    pdf.set_fill_color(220, 230, 241)
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(95, 6, 'Inspeccion del Marchamo', border=1, align='C', fill=True)
+    pdf.cell(95, 6, 'Inspeccion del Candado', border=1, align='C', fill=True, ln=1)
+    
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(95, 6, 'El marchamo se encuentra alterado?   NO', border=1)
+    pdf.cell(95, 6, 'El candado se encuentra alterado?   NO', border=1, ln=1)
+    pdf.cell(95, 6, f"No. de marchamo: {row.get('Marchamo', 'N/A')}", border=1)
+    pdf.cell(95, 6, '', border=1, ln=1)
+    pdf.ln(3)
+
+    # --- INSPECCIÓN DEL MATERIAL ---
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(190, 6, 'Inspeccion del Material', border=1, align='C', fill=True, ln=1)
+    
+    pdf.set_font('Arial', '', 8)
+    pdf.cell(35, 6, 'Proveedor:', border=1)
+    pdf.cell(155, 6, str(row.get('Proveedor', '')), border=1, ln=1)
+    
+    pdf.cell(35, 6, 'Material:', border=1)
+    pdf.cell(155, 6, str(row.get('NombreMaterial', '')), border=1, ln=1)
+    
+    pdf.cell(35, 6, 'Cantidad:', border=1)
+    pdf.cell(60, 6, str(row.get('Cantidad', '')), border=1)
+    pdf.cell(35, 6, 'Unidad de medida:', border=1)
+    pdf.cell(60, 6, str(row.get('Unidad', '')), border=1, ln=1)
+    
+    pdf.cell(35, 6, 'Lote:', border=1)
+    pdf.cell(60, 6, str(row.get('LoteProveedor', '')), border=1)
+    pdf.cell(35, 6, 'Temp. Material (C):', border=1)
+    temp_str = str(row.get('Temperatura', 'N/A'))
+    pdf.cell(60, 6, temp_str if temp_str not in ["nan", ""] else "N/A", border=1, ln=1)
+    
+    pdf.cell(35, 6, 'Fecha Produccion:', border=1)
+    pdf.cell(60, 6, str(row.get('FechaProduccion', '')), border=1)
+    pdf.cell(35, 6, 'Fecha Vencimiento:', border=1)
+    pdf.cell(60, 6, str(row.get('FechaVencimiento', '')), border=1, ln=1)
+    pdf.ln(3)
+
+    # --- PREGUNTAS DEL MATERIAL ---
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(160, 6, 'Criterio de Evaluacion (Material)', border=1)
+    pdf.cell(30, 6, 'Resultado', border=1, align='C', ln=1)
+    
+    pdf.set_font('Arial', '', 8)
+    preguntas_mat = [
+        "Tomando en cuenta la fecha, el lote posee mas de un mes de vida?",
+        f"Categoria de la matriz de materiales a recibir: {row.get('Criticidad', 'N/A')}",
+        "El Certificado de Analisis corresponde al numero de lote?",
+        "Los resultados de los Certificados cumplen parametros criticos?",
+        "El empaque del material se encuentra integro y sin deterioro?",
+        "El material esta protegido de la intemperie?",
+        "Coincide la entrega segun documento contra lo fisico?"
+    ]
+    for p in preguntas_mat:
+        pdf.cell(160, 6, p, border=1)
+        pdf.cell(30, 6, "SI (Cumple)", border=1, align='C', ln=1)
+    pdf.ln(3)
+
+    # --- PREGUNTAS DEL TRANSPORTE ---
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(190, 6, 'Inspeccion del Transporte', border=1, align='C', fill=True, ln=1)
+    pdf.cell(160, 6, 'Criterio de Evaluacion (Transporte)', border=1)
+    pdf.cell(30, 6, 'Resultado', border=1, align='C', ln=1)
+    
+    pdf.set_font('Arial', '', 8)
+    preguntas_trans = [
+        ("Se encuentra el transporte libre de plagas?", "SI"),
+        ("El techo, paredes del transporte o lona estan integras?", "SI"),
+        ("El techo, paredes del transporte o lona estan limpios?", "SI"),
+        ("El piso del transporte esta limpio y en buenas condiciones?", "SI"),
+        ("El transporte cumple con la temperatura especificada?", "SI" if temp_str != "N/A" else "N/A"),
+        ("El transporte se encuentra libre de olores extranos?", "SI"),
+        ("La tarima de uso retornable se encuentra en buenas condiciones?", "SI")
+    ]
+    for p, res in preguntas_trans:
+        pdf.cell(160, 6, p, border=1)
+        pdf.cell(30, 6, res, border=1, align='C', ln=1)
+    pdf.ln(4)
+
+    # --- RESULTADO FINAL ---
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(35, 8, 'Resultado final:', border=1)
+    pdf.set_text_color(0, 128, 0) # Verde
+    pdf.cell(155, 8, 'APROBADO', border=1, align='C', ln=1)
+    pdf.set_text_color(0, 0, 0)
+    
+    pdf.set_font('Arial', '', 8)
+    pdf.multi_cell(190, 6, 'OBSERVACIONES: Validacion digital autorizada en plataforma. Se adjunta documento oficial del proveedor en la carpeta de trazabilidad correspondiente.', border=1)
+    pdf.ln(6)
+
+    # --- FIRMAS ---
+    pdf.cell(95, 5, 'Nombre de la persona que realiza la recepcion:', 0, 0)
+    pdf.cell(95, 5, 'Vo. Bo. Calidad:', 0, 1)
+    
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(95, 6, str(row.get('Responsable', '')), 0, 0)
+    pdf.cell(95, 6, f"Firmado digitalmente por: {supervisor}", 0, 1)
+
+    pdf.output(ruta_guardado)
+
+
+# Inicializar carrito
 if "items_ingreso_actual" not in st.session_state:
   st.session_state.items_ingreso_actual = []
 
-# Cargar catálogo maestro
+# Cargar catálogo
 df_db = None
 if os.path.exists(ARCHIVO_CATALOGO):
   try:
@@ -81,13 +221,8 @@ if os.path.exists(ARCHIVO_CATALOGO):
   except Exception as e:
     st.error(f"Error al leer el catálogo: {e}")
 
-# ------------------------------------------
-# PANEL LATERAL DE ADMINISTRACIÓN
-# ------------------------------------------
 st.sidebar.header("⚙️ Panel de Administración")
-
-# 1. Subir Catálogo
-archivo_catalogo_nuevo = st.sidebar.file_uploader("1. Actualizar Catálogo (Excel)", type=["xlsx"])
+archivo_catalogo_nuevo = st.sidebar.file_uploader("Actualizar Catálogo Excel", type=["xlsx"])
 if archivo_catalogo_nuevo is not None:
   with open(ARCHIVO_CATALOGO, "wb") as f:
       f.write(archivo_catalogo_nuevo.getbuffer())
@@ -95,18 +230,10 @@ if archivo_catalogo_nuevo is not None:
   df_db.columns = df_db.columns.str.strip()
   st.sidebar.success("¡Catálogo actualizado!")
 
-# 2. Subir Plantilla del Checklist (NUEVO)
-st.sidebar.markdown("---")
-plantilla_nueva = st.sidebar.file_uploader("2. Subir Plantilla de Checklist Oficial (Excel en blanco)", type=["xlsx"])
-if plantilla_nueva is not None:
-    with open(ARCHIVO_PLANTILLA, "wb") as f:
-        f.write(plantilla_nueva.getbuffer())
-    st.sidebar.success("¡Plantilla Oficial cargada con éxito! El sistema la usará para rellenar los datos.")
-
 tab1, tab2, tab3 = st.tabs([
     "📝 1. Ingreso de Operador",
-    "✍️ 2. Panel de Calidad y Firma",
-    "🔍 3. Búsqueda y Trazabilidad",
+    "✍️ 2. Panel de Calidad",
+    "🔍 3. Trazabilidad",
 ])
 
 # ------------------------------------------
@@ -114,7 +241,6 @@ tab1, tab2, tab3 = st.tabs([
 # ------------------------------------------
 with tab1:
   st.header("Formulario de Recepción de Materiales")
-  st.markdown("Complete los datos de factura, placa, lote y agregue los productos.")
 
   if df_db is not None:
     col_planta = "Planta"
@@ -139,33 +265,34 @@ with tab1:
       df_prov = df_tipo[df_tipo[col_proveedor] == proveedor_sel]
 
     materiales_disponibles = df_prov[col_material].dropna().unique()
-    material_sel = st.selectbox("Nombre del Material (Producto)", materiales_disponibles)
+    material_sel = st.selectbox("Nombre del Material", materiales_disponibles)
 
     df_material = df_prov[df_prov[col_material] == material_sel]
-    criticidad_val = "N/A"
-    if col_criticidad and not df_material.empty:
-      criticidad_val = str(df_material.iloc[0][col_criticidad])
-
-    st.info(f"🏷️ **Criticidad Asociada al Material:** {criticidad_val}")
+    criticidad_val = str(df_material.iloc[0][col_criticidad]) if col_criticidad and not df_material.empty else "N/A"
 
     material_lower = str(material_sel).lower()
     tipo_lower = str(tipo_mat_sel).lower()
-    requiere_temperatura = any(
-        kw in material_lower or kw in tipo_lower
-        for kw in ["pulpa", "concentrado", "leche", "refrigerado", "congelado"]
-    )
+    requiere_temperatura = any(kw in material_lower or kw in tipo_lower for kw in ["pulpa", "concentrado", "leche", "refrigerado", "congelado"])
 
     with st.form("form_item_recepcion"):
-      st.subheader("2. Datos de Factura, Transporte y Lote")
-      t1, t2 = st.columns(2)
+      st.subheader("Datos de Transporte y Lote")
+      t1, t2, t3 = st.columns(3)
       with t1:
-        factura_guia = st.text_input("No. de Factura y/o Guía", placeholder="Ej. FAC-12345")
+        factura_guia = st.text_input("No. de Factura/Guía")
       with t2:
-        placa_transporte = st.text_input("Placa del Transporte", placeholder="Ej. C-123ABC")
+        placa_transporte = st.text_input("Placa de Transporte")
+      with t3:
+        lote_proveedor = st.text_input("Lote del Proveedor")
 
-      c3, c4, c5 = st.columns(3)
-      with c3:
-        lote_proveedor = st.text_input("Lote del Proveedor", placeholder="Ej. LOTE-98765")
+      s1, s2, s3 = st.columns(3)
+      with s1:
+        ingreso_sap = st.text_input("Fecha de Ingreso a SAP (Opcional)")
+      with s2:
+        doc_sap = st.text_input("No. Documento SAP (Opcional)")
+      with s3:
+        marchamo = st.text_input("No. de Marchamo (Opcional)")
+
+      c4, c5 = st.columns(2)
       with c4:
         cantidad = st.number_input("Cantidad Recibida", min_value=0.0, format="%.2f")
       with c5:
@@ -179,23 +306,18 @@ with tab1:
 
       temperatura = "N/A"
       if requiere_temperatura:
-        st.markdown("---")
-        st.subheader("❄️ Control de Temperatura (Requerido)")
-        temperatura = st.number_input("Temperatura de Recepción (°C)", value=4.0, format="%.1f")
+        temperatura = st.number_input("Temp. de Recepción (°C)", value=4.0, format="%.1f")
 
       st.markdown("---")
-      st.subheader("📎 Certificado de Calidad del Producto")
-      certificado_file = st.file_uploader(
-          "Subir Archivo del Certificado (PDF o Imagen)", type=["jpg", "jpeg", "png", "pdf"]
-      )
+      certificado_file = st.file_uploader("Subir Archivo del Certificado (PDF o Imagen)", type=["jpg", "jpeg", "png", "pdf"])
 
-      agregar_item = st.form_submit_button("➕ Agregar este producto a la lista de ingreso")
+      agregar_item = st.form_submit_button("➕ Agregar producto a la lista")
 
     if agregar_item:
       if not lote_proveedor or not factura_guia:
         st.warning("⚠️ Debes ingresar el número de factura/guía y el número de lote.")
       elif certificado_file is None:
-        st.warning("⚠️ Es obligatorio adjuntar el archivo del certificado para este producto.")
+        st.warning("⚠️ Es obligatorio adjuntar el archivo del certificado.")
       else:
         os.makedirs("temp_certificados", exist_ok=True)
         ruta_cert_temp = os.path.join("temp_certificados", certificado_file.name)
@@ -208,8 +330,11 @@ with tab1:
             "Proveedor": proveedor_sel,
             "NombreMaterial": material_sel,
             "FacturaGuia": factura_guia,
-            "Transporte": proveedor_sel, # Transporte igual al proveedor
+            "Transporte": proveedor_sel, 
             "Placa": placa_transporte,
+            "IngresoSAP": ingreso_sap,
+            "DocSAP": doc_sap,
+            "Marchamo": marchamo,
             "Lote": lote_proveedor,
             "Cantidad": cantidad,
             "Unidad": unidad,
@@ -220,36 +345,30 @@ with tab1:
             "RutaTemp": ruta_cert_temp,
         }
         st.session_state.items_ingreso_actual.append(nuevo_item)
-        st.success(f"✅ ¡Producto '{material_sel}' agregado con su certificado a la lista!")
+        st.success("✅ ¡Producto agregado!")
 
     if len(st.session_state.items_ingreso_actual) > 0:
       st.markdown("---")
-      st.subheader("📋 Resumen de Productos Agregados en este Ingreso")
+      st.subheader("📋 Resumen de Productos")
       df_carrito = pd.DataFrame(st.session_state.items_ingreso_actual)
-      st.dataframe(df_carrito[["Planta", "Proveedor", "NombreMaterial", "FacturaGuia", "Lote", "Cantidad", "Unidad"]], use_container_width=True)
+      st.dataframe(df_carrito[["Planta", "NombreMaterial", "FacturaGuia", "Lote", "Cantidad"]], use_container_width=True)
 
       item_a_borrar = st.selectbox(
-          "Seleccione un producto para quitar de la lista actual",
+          "Quitar producto de la lista actual:",
           options=range(len(st.session_state.items_ingreso_actual)),
           format_func=lambda x: f"{st.session_state.items_ingreso_actual[x]['NombreMaterial']} (Lote: {st.session_state.items_ingreso_actual[x]['Lote']})"
       )
-      if st.button("❌ Quitar producto seleccionado"):
+      if st.button("❌ Quitar seleccionado"):
         st.session_state.items_ingreso_actual.pop(item_a_borrar)
         st.rerun()
 
-      if st.button("🗑️ Limpiar toda la lista"):
-        st.session_state.items_ingreso_actual = []
-        st.rerun()
-
-      st.markdown("---")
-      st.subheader("3. Finalizar y Enviar a Revisión de Calidad")
       with st.form("form_finalizar_envio"):
-        responsable = st.text_input("Operador Responsable", placeholder="Tu Nombre Completo")
-        enviar_todo = st.form_submit_button("🚀 Enviar Todos los Productos a Calidad", type="primary")
+        responsable = st.text_input("Operador Responsable")
+        enviar_todo = st.form_submit_button("🚀 Enviar a Calidad", type="primary")
 
       if enviar_todo:
         if not responsable:
-          st.error("⚠️ Por favor ingresa el nombre del operador responsable.")
+          st.error("⚠️ Ingresa el nombre del operador responsable.")
         else:
           df_p = cargar_pendientes()
           nuevo_id = int(df_p["ID"].max()) + 1 if not df_p.empty and not pd.isna(df_p["ID"].max()) else 1
@@ -264,6 +383,9 @@ with tab1:
                 "FacturaGuia": str(item["FacturaGuia"]),
                 "Transporte": str(item["Transporte"]),
                 "Placa": str(item["Placa"]),
+                "IngresoSAP": str(item["IngresoSAP"]),
+                "DocSAP": str(item["DocSAP"]),
+                "Marchamo": str(item["Marchamo"]),
                 "LoteProveedor": str(item["Lote"]),
                 "Cantidad": item["Cantidad"],
                 "Unidad": str(item["Unidad"]),
@@ -276,7 +398,6 @@ with tab1:
                 "Estado": "Pendiente",
                 "FirmaCalidad": "Sin firmar",
                 "RutaCarpeta": "",
-                "RutaExcel": "",
                 "RutaChecklistOficial": "",
                 "RutaPdfCert": str(item["RutaTemp"]),
             }
@@ -285,146 +406,96 @@ with tab1:
 
           guardar_pendientes(df_p)
           st.session_state.items_ingreso_actual = []
-          st.success("🎉 ¡Todos los productos fueron enviados con éxito al panel de calidad!")
+          st.success("🎉 ¡Enviados a calidad con éxito!")
 
   else:
-    st.warning("⚠️ No se detectó automáticamente el catálogo en el repositorio.")
+    st.warning("⚠️ Sube el catálogo maestro.")
 
 # ------------------------------------------
 # PESTAÑA 2: PANEL DE CALIDAD Y FIRMA
 # ------------------------------------------
 with tab2:
-  st.header("✍️ Panel de Control y Firma de Calidad")
-  st.markdown("Ingrese su contraseña, revise los datos, apruebe para rellenar la **Plantilla de Excel** que subió o elimine registros incorrectos.")
-
-  clave_ingresada = st.text_input("Contraseña de Supervisor de Calidad", type="password", key="pass_calidad")
+  st.header("✍️ Panel de Control y Firma")
+  
+  clave_ingresada = st.text_input("Contraseña de Supervisor", type="password")
   CLAVE_SUPERVISOR = "1234"
 
   if clave_ingresada == CLAVE_SUPERVISOR:
-    st.success("🔓 Acceso de supervisor autorizado.")
+    st.success("🔓 Acceso autorizado.")
     df_p = cargar_pendientes()
     pendientes = df_p[df_p["Estado"] == "Pendiente"] if not df_p.empty else pd.DataFrame()
 
     if len(pendientes) == 0:
-      st.info("No hay registros pendientes de aprobación en este momento.")
+      st.info("No hay registros pendientes.")
     else:
       for index, row in pendientes.iterrows():
-        with st.expander(f"📥 Recepción ID #{row['ID']} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']}"):
+        with st.expander(f"📥 ID #{row['ID']} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']}"):
           c1, c2 = st.columns(2)
           with c1:
-            st.write(f"**Planta:** {row['Planta']}")
             st.write(f"**Proveedor:** {row['Proveedor']}")
-            st.write(f"**Factura / Guía:** {row['FacturaGuia']}")
-            st.write(f"**Placa de Transporte:** {row['Placa']}")
+            st.write(f"**Factura:** {row['FacturaGuia']}")
           with c2:
             st.write(f"**Cantidad:** {row['Cantidad']} {row['Unidad']}")
-            st.write(f"**Prod. / Venc.:** {row['FechaProduccion']} al {row['FechaVencimiento']}")
             st.write(f"**Operador:** {row['Responsable']}")
 
           if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
-            if str(row["RutaPdfCert"]).endswith((".jpg", ".jpeg", ".png")):
-              st.image(row["RutaPdfCert"], caption="Certificado Adjunto", width=350)
-            else:
-              st.write("📄 Certificado PDF del proveedor adjunto disponible.")
+            st.write("📄 Certificado adjunto disponible.")
 
           col_btn1, col_btn2 = st.columns(2)
-          
           with col_btn1:
             with st.form(f"form_firma_{row['ID']}"):
-              nombre_supervisor = st.text_input("Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}")
-              aprobar = st.form_submit_button("Aprobar y Rellenar Plantilla Excel 🛡️", type="primary")
+              nombre_supervisor = st.text_input("Firma del Supervisor")
+              aprobar = st.form_submit_button("Aprobar y Generar R-ICC-14-1 🛡️", type="primary")
 
             if aprobar:
               if not nombre_supervisor:
-                st.error("Debe ingresar su nombre para firmar.")
+                st.error("Ingrese su firma.")
               else:
-                with st.spinner("Rellenando tu plantilla oficial de Excel..."):
+                with st.spinner("Generando PDF Oficial R-ICC-14-1..."):
                   carpeta_base = "./Registros_Oficiales"
                   subcarpeta_lote = f"Lote_{row['LoteProveedor']}_{row['NombreMaterial']}".replace(" ", "_")
                   ruta_destino = os.path.join(carpeta_base, str(row["Planta"]), str(row["TipoMaterial"]), str(row["NombreMaterial"]), subcarpeta_lote)
                   os.makedirs(ruta_destino, exist_ok=True)
 
-                  # 1. Guardar certificado original del proveedor
+                  # 1. Guardar certificado
                   ext_cert = os.path.splitext(str(row["RutaPdfCert"]))[1] if row["RutaPdfCert"] else ".pdf"
-                  nombre_cert_oficial = f"Certificado_Original_{row['LoteProveedor']}{ext_cert}"
-                  ruta_cert_final = os.path.join(ruta_destino, nombre_cert_oficial)
-
+                  ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{row['LoteProveedor']}{ext_cert}")
                   if row["RutaPdfCert"] and os.path.exists(str(row["RutaPdfCert"])):
                     shutil.copy(str(row["RutaPdfCert"]), ruta_cert_final)
 
-                  # 2. Llenar el Excel con la plantilla que se subió en el panel de administración
-                  prefijo_archivo = f"Checklist_{row['NombreMaterial']}_Lote_{row['LoteProveedor']}".replace(" ", "_")
-                  ruta_excel_final = os.path.join(ruta_destino, f"{prefijo_archivo}.xlsx")
+                  # 2. Generar Checklist R ICC 14-1 en PDF desde cero
+                  ruta_checklist_final = os.path.join(ruta_destino, f"Checklist_RICC14-1_{row['LoteProveedor']}.pdf")
+                  generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_final)
 
-                  # Si subieron la plantilla maestra, la usamos. Si no, usa respaldo.
-                  if os.path.exists(ARCHIVO_PLANTILLA):
-                    wb = openpyxl.load_workbook(ARCHIVO_PLANTILLA)
-                    ws = wb["Recepción"] if "Recepción" in wb.sheetnames else wb.active
-                    
-                    # Rellenando los campos detectados en tu plantilla R ICC 14-1
-                    ws['C5'] = row['Fecha']                    # Fecha de recepción
-                    ws['F5'] = row['FacturaGuia']              # Número de factura/guía
-                    ws['D6'] = row['Transporte']               # Nombre del transporte
-                    ws['D7'] = row['Placa']                    # Placa
-                    ws['C16'] = row['Proveedor']               # Proveedor
-                    ws['C17'] = row['NombreMaterial']          # Material
-                    ws['C18'] = float(row['Cantidad']) if pd.notna(row['Cantidad']) else 0.0
-                    ws['C19'] = row['Unidad']                  # Unidad
-                    ws['C20'] = row['LoteProveedor']           # Lote
-                    ws['C21'] = str(row['FechaProduccion'])    # F. Producción
-                    ws['C22'] = str(row['FechaVencimiento'])   # F. Vencimiento
-                    
-                    if str(row['Temperatura']) != "N/A":
-                      ws['D39'] = float(row['Temperatura'])    # Temperatura
-                    
-                    ws['C51'] = row['Responsable']             # Operador
-                    ws['C53'] = nombre_supervisor              # Firma Supervisor
-
-                    wb.save(ruta_excel_final)
-                  else:
-                    df_resp = pd.DataFrame([row])
-                    df_resp.to_excel(ruta_excel_final, index=False)
-                    st.warning("No se encontró la Plantilla de Checklist. Se generó un Excel básico. (Recuerde subir su plantilla en la barra lateral).")
-
-                  # Guardar las rutas en el historial
                   df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
                   df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(nombre_supervisor)
-                  df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = str(ruta_destino)
-                  df_p.loc[df_p["ID"] == row["ID"], "RutaExcel"] = str(ruta_excel_final)
+                  df_p.loc[df_p["ID"] == row["ID"], "RutaChecklistOficial"] = str(ruta_checklist_final)
                   df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(ruta_cert_final)
                   guardar_pendientes(df_p)
 
-                  st.success("🎉 ¡Aprobado! Checklist de Excel generado correctamente.")
+                  st.success("🎉 ¡Checklist PDF R-ICC-14-1 Generado y Aprobado!")
                   st.rerun()
 
           with col_btn2:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🗑️ Eliminar Registro Pendiente", key=f"del_pend_{row['ID']}"):
+            if st.button("🗑️ Eliminar", key=f"del_pend_{row['ID']}"):
               df_p = df_p[df_p["ID"] != row["ID"]]
               guardar_pendientes(df_p)
-              st.warning("⚠️ Registro pendiente eliminado.")
               st.rerun()
-
-  elif clave_ingresada == "":
-    st.info("🔒 Por favor, ingrese la contraseña de supervisor (1234) para ver los registros pendientes.")
-  else:
-    st.error("❌ Contraseña incorrecta. Intente nuevamente.")
 
 # ------------------------------------------
 # PESTAÑA 3: BÚSQUEDA Y TRAZABILIDAD
 # ------------------------------------------
 with tab3:
-  st.header("🔍 Buscador y Consulta de Registros Oficiales")
-  st.markdown("Consulte el historial de recepciones aprobadas, descargue los checklists de Excel o elimine registros.")
-
+  st.header("🔍 Buscador y Consulta")
+  
   df_p = cargar_pendientes()
   aprobados = df_p[df_p["Estado"] == "Aprobado"] if not df_p.empty else pd.DataFrame()
 
   if len(aprobados) == 0:
-    st.info("Aún no hay registros aprobados y archivados en el sistema.")
+    st.info("No hay registros aprobados.")
   else:
-    busqueda = st.text_input("Filtro de búsqueda rápida", placeholder="Escriba el Lote, Material o Proveedor...")
-
+    busqueda = st.text_input("Filtro rápido (Lote, Material o Proveedor)")
     if busqueda:
       resultado = aprobados[
           aprobados["LoteProveedor"].astype(str).str.contains(busqueda, case=False, na=False) |
@@ -434,47 +505,42 @@ with tab3:
     else:
       resultado = aprobados
 
-    st.dataframe(resultado[["Planta", "NombreMaterial", "Proveedor", "FacturaGuia", "Placa", "LoteProveedor", "Cantidad", "Unidad", "FechaProduccion", "FirmaCalidad"]], use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📥 Descarga de Archivos Oficiales y Gestión")
+    st.dataframe(resultado[["NombreMaterial", "FacturaGuia", "LoteProveedor", "Fecha", "FirmaCalidad"]], use_container_width=True)
 
     for idx, row in resultado.iterrows():
-      with st.expander(f"📁 Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Aprobado por: {row['FirmaCalidad']}"):
+      with st.expander(f"📁 {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Supervisor: {row['FirmaCalidad']}"):
         col_d1, col_d2, col_d3 = st.columns(3)
 
-        # Usamos row.get para soportar tanto RutaExcel como RutaChecklistOficial de versiones anteriores
-        ruta_checklist = row.get("RutaExcel", "") if str(row.get("RutaExcel", "")) != "nan" and str(row.get("RutaExcel", "")) != "" else row.get("RutaChecklistOficial", "")
-
+        ruta_chk = str(row.get("RutaChecklistOficial", ""))
         with col_d1:
-          if pd.notna(ruta_checklist) and str(ruta_checklist).strip() != "" and os.path.exists(str(ruta_checklist)):
-            with open(str(ruta_checklist), "rb") as f:
+          if pd.notna(ruta_chk) and ruta_chk != "nan" and os.path.exists(ruta_chk):
+            with open(ruta_chk, "rb") as f:
               st.download_button(
-                  label="📊 Descargar Checklist Oficial",
+                  label="📊 Descargar Checklist (PDF Oficial)",
                   data=f,
-                  file_name=os.path.basename(str(ruta_checklist)),
-                  mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if str(ruta_checklist).endswith(".xlsx") else "application/pdf",
+                  file_name=os.path.basename(ruta_chk),
+                  mime="application/pdf",
                   key=f"dl_chk_{row['ID']}",
               )
           else:
             st.info("Checklist no disponible.")
 
+        ruta_cert = str(row.get("RutaPdfCert", ""))
         with col_d2:
-          if "RutaPdfCert" in row and pd.notna(row["RutaPdfCert"]) and str(row["RutaPdfCert"]).strip() != "" and os.path.exists(str(row["RutaPdfCert"])):
-            with open(row["RutaPdfCert"], "rb") as f:
+          if pd.notna(ruta_cert) and ruta_cert != "nan" and os.path.exists(ruta_cert):
+            with open(ruta_cert, "rb") as f:
               st.download_button(
-                  label="📄 Descargar Certificado del Proveedor",
+                  label="📄 Descargar Certificado Subido",
                   data=f,
-                  file_name=os.path.basename(str(row["RutaPdfCert"])),
-                  mime="application/pdf" if str(row["RutaPdfCert"]).endswith(".pdf") else "image/jpeg",
-                  key=f"dl_pdf_{row['ID']}",
+                  file_name=os.path.basename(ruta_cert),
+                  mime="application/pdf" if ruta_cert.endswith(".pdf") else "image/jpeg",
+                  key=f"dl_cert_{row['ID']}",
               )
           else:
             st.info("Certificado no disponible.")
 
         with col_d3:
-          if st.button("🗑️ Borrar del Historial", key=f"del_apr_{row['ID']}"):
+          if st.button("🗑️ Borrar", key=f"del_apr_{row['ID']}"):
             df_p = df_p[df_p["ID"] != row["ID"]]
             guardar_pendientes(df_p)
-            st.warning("⚠️ Registro eliminado del historial oficial.")
             st.rerun()
