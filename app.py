@@ -639,7 +639,6 @@ with tab1:
         st.subheader("❄️ Control de Temperaturas (Requerido por tipo de material)")
         tmp1, tmp2 = st.columns(2)
         with tmp1:
-            # Caja de texto libre para temperaturas (permite negativas ej. -18.0 o valores especiales)
             temp_trans = st.text_input("Temp. Transporte (°C)", value="4.0", placeholder="Ej. 4.0 o -18.5")
         with tmp2:
             temp_mat = st.text_input("Temp. del Material (°C)", value="4.0", placeholder="Ej. 4.0 o -18.5")
@@ -822,15 +821,19 @@ with tab2:
                 ruta_firma_sup = guardar_firma(canvas_sup, f"firma_sup_{row['ID']}")
                 row['RutaFirmaSup'] = ruta_firma_sup
 
+                # --- PROTECCIÓN ROBUSTA CONTRA FileNotFoundError ---
                 ruta_cert_origen = str(row.get("RutaPdfCert", ""))
-                ext_cert = os.path.splitext(ruta_cert_origen)[1] if ruta_cert_origen else ".pdf"
+                ext_cert = os.path.splitext(ruta_cert_origen)[1] if ruta_cert_origen and ruta_cert_origen != "nan" else ".pdf"
                 ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{row['LoteProveedor']}{ext_cert}")
                 
-                # Validación defensiva para evitar FileNotFoundError
-                if ruta_cert_origen and os.path.exists(ruta_cert_origen):
-                    shutil.copy(ruta_cert_origen, ruta_cert_final)
-                else:
+                try:
+                    if ruta_cert_origen and ruta_cert_origen != "nan" and os.path.exists(ruta_cert_origen):
+                        shutil.copy(ruta_cert_origen, ruta_cert_final)
+                    else:
+                        ruta_cert_final = ""
+                except Exception:
                     ruta_cert_final = ""
+                # --------------------------------------------------
 
                 ruta_checklist_temp = os.path.join(ruta_destino, f"TEMP_Checklist_{row['LoteProveedor']}.pdf")
                 generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_temp)
