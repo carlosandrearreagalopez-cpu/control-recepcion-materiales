@@ -124,11 +124,9 @@ def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
     ancho_bloque = 55.0 / len(opts)
     for i, opt in enumerate(opts):
         pdf.set_font('Arial', '', 7)
-        # Posición para el texto de la opción
         pdf.set_xy(curr_x, y)
         pdf.cell(ancho_bloque - 4, h_row, opt, 0, 0, 'R')
         
-        # Posición exacta para la cajita cuadrada a la derecha del texto
         box_x = curr_x + ancho_bloque - 3.5
         box_y = y + (h_row - 3) / 2
         pdf.rect(box_x, box_y, 3, 3)
@@ -214,14 +212,14 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.rect(200, y_start, 30, h_row*2)
     pdf.rect(230, y_start, 57, h_row*2)
 
-    # Marchamo (Pregunta 1)
+    # Marchamo (Pregunta 1) - Ajustado x = 94 para que N/A no flote afuera
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
     pdf.cell(50, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
     
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
-    dibujar_opciones_bloque(pdf, 65, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
+    dibujar_opciones_bloque(pdf, 60, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m)
 
     pdf.set_xy(15, y_start + h_row)
     pdf.cell(25, h_row, 'No. de marchamo:', 0, 0)
@@ -402,42 +400,42 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS PERFECTAMENTE ESTRUCTURADO ---
-    pdf.ln(15) 
+    # --- ESPACIO DE FIRMAS CORREGIDO (Nombre arriba de la línea, descripción a la par del nombre) ---
+    pdf.ln(18) 
     y_linea = pdf.get_y()
 
     # 1. Dibujar las líneas base de firma
-    pdf.line(50, y_linea, 120, y_linea)   # Línea Operador
-    pdf.line(170, y_linea, 240, y_linea)  # Línea Supervisor
+    pdf.line(40, y_linea, 130, y_linea)   # Línea Operador
+    pdf.line(157, y_linea, 247, y_linea)  # Línea Supervisor
 
-    # 2. Insertar Imágenes de las firmas exactamente centradas sobre la línea
+    # 2. Insertar Imágenes de las firmas ENCIMA de la línea
     ruta_firma_op = str(row.get('RutaFirmaOp', ''))
     if ruta_firma_op and os.path.exists(ruta_firma_op):
         try:
-            pdf.image(ruta_firma_op, x=60, y=y_linea - 14, w=50, h=13)
+            pdf.image(ruta_firma_op, x=60, y=y_linea - 15, w=50, h=14)
         except Exception: pass
         
     ruta_firma_sup = str(row.get('RutaFirmaSup', ''))
     if ruta_firma_sup and os.path.exists(ruta_firma_sup):
         try:
-            pdf.image(ruta_firma_sup, x=180, y=y_linea - 14, w=50, h=13)
+            pdf.image(ruta_firma_sup, x=177, y=y_linea - 15, w=50, h=14)
         except Exception: pass
 
-    # 3. Etiquetas de descripción DEBAJO de cada línea
-    pdf.set_xy(35, y_linea + 2)
-    pdf.set_font('Arial', 'B', 8)
-    pdf.cell(80, 4, 'Nombre de la persona que realiza la recepción', 0, 0, 'C')
-    
-    pdf.set_xy(165, y_linea + 2)
-    pdf.cell(80, 4, 'Vo. Bo. Calidad', 0, 0, 'C')
-
-    # 4. Nombre del responsable / supervisor impreso justo DEBAJO de su etiqueta
-    pdf.set_xy(35, y_linea + 6)
+    # 3. Nombre del responsable y del supervisor impresos JUSTO ARRIBA de su respectiva línea
+    pdf.set_xy(40, y_linea - 4)
     pdf.set_font('Arial', '', 8)
-    pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
+    pdf.cell(90, 4, str(row.get('Responsable', '')), 0, 0, 'C')
     
-    pdf.set_xy(165, y_linea + 6)
-    pdf.cell(80, 4, supervisor, 0, 0, 'C')
+    pdf.set_xy(157, y_linea - 4)
+    pdf.cell(90, 4, supervisor, 0, 0, 'C')
+
+    # 4. Textos descriptivos debajo/a la par de la línea
+    pdf.set_xy(10, y_linea + 1)
+    pdf.set_font('Arial', 'B', 8)
+    pdf.cell(130, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
+    
+    pdf.set_xy(110, y_linea + 1)
+    pdf.cell(45, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
 
     pdf.output(ruta_guardado_temp)
 
