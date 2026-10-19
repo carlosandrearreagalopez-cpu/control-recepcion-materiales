@@ -42,7 +42,33 @@ ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
 
 def cargar_pendientes():
   if os.path.exists(ARCHIVO_PENDIENTES):
-    return pd.read_csv(ARCHIVO_PENDIENTES)
+    df = pd.read_csv(ARCHIVO_PENDIENTES)
+    # Asegurar que todas las columnas de texto existan y acepten strings
+    columnas_texto = [
+        "Planta",
+        "TipoMaterial",
+        "NombreMaterial",
+        "Proveedor",
+        "LoteProveedor",
+        "Unidad",
+        "Temperatura",
+        "FechaProduccion",
+        "FechaVencimiento",
+        "Criticidad",
+        "Responsable",
+        "Fecha",
+        "Estado",
+        "FirmaCalidad",
+        "RutaCarpeta",
+        "RutaExcel",
+        "RutaPdfCert",
+    ]
+    for col in columnas_texto:
+      if col not in df.columns:
+        df[col] = ""
+      else:
+        df[col] = df[col].astype(str)
+    return df
   else:
     return pd.DataFrame(columns=[
         "ID",
@@ -267,29 +293,29 @@ with tab1:
           st.error("⚠️ Por favor ingresa el nombre del operador responsable.")
         else:
           df_p = cargar_pendientes()
-          nuevo_id = len(df_p) + 1 if not df_p.empty else 1
+          nuevo_id = int(df_p["ID"].max()) + 1 if not df_p.empty and not pd.isna(df_p["ID"].max()) else 1
 
           for item in st.session_state.items_ingreso_actual:
             nuevo_registro = {
                 "ID": nuevo_id,
-                "Planta": item["Planta"],
-                "TipoMaterial": item["TipoMaterial"],
-                "NombreMaterial": item["NombreMaterial"],
-                "Proveedor": item["Proveedor"],
-                "LoteProveedor": item["Lote"],
+                "Planta": str(item["Planta"]),
+                "TipoMaterial": str(item["TipoMaterial"]),
+                "NombreMaterial": str(item["NombreMaterial"]),
+                "Proveedor": str(item["Proveedor"]),
+                "LoteProveedor": str(item["Lote"]),
                 "Cantidad": item["Cantidad"],
-                "Unidad": item["Unidad"],
-                "Temperatura": item["Temperatura"],
-                "FechaProduccion": item["Produccion"],
-                "FechaVencimiento": item["Vencimiento"],
-                "Criticidad": item["Criticidad"],
-                "Responsable": responsable,
+                "Unidad": str(item["Unidad"]),
+                "Temperatura": str(item["Temperatura"]),
+                "FechaProduccion": str(item["Produccion"]),
+                "FechaVencimiento": str(item["Vencimiento"]),
+                "Criticidad": str(item["Criticidad"]),
+                "Responsable": str(responsable),
                 "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "Estado": "Pendiente",
                 "FirmaCalidad": "Sin firmar",
                 "RutaCarpeta": "",
                 "RutaExcel": "",
-                "RutaPdfCert": item["RutaTemp"],
+                "RutaPdfCert": str(item["RutaTemp"]),
             }
             df_p = pd.concat(
                 [df_p, pd.DataFrame([nuevo_registro])], ignore_index=True
@@ -369,7 +395,7 @@ with tab2:
 
           with st.form(f"form_firma_{row['ID']}"):
             nombre_supervisor = st.text_input(
-                "Nombre del Supervisor (Firma Digital)"
+                "Nombre del Supervisor (Firma Digital)", key=f"sup_{row['ID']}"
             )
             aprobar = st.form_submit_button(
                 "Aprobar, Generar Excel Oficial, PDF y Guardar en Carpetas 🛡️",
@@ -467,7 +493,6 @@ with tab2:
                 if os.path.exists(ruta_plantilla):
                   wb = openpyxl.load_workbook(ruta_plantilla)
                   ws = wb.active
-                  # Opcional: Inyectar datos clave si tu plantilla lo requiere
                   wb.save(ruta_excel_final)
                 else:
                   df_resp = pd.DataFrame([row])
@@ -475,12 +500,16 @@ with tab2:
 
                 # Actualizar estado en CSV temporal
                 df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
-                df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = (
+                df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(
                     nombre_supervisor
                 )
-                df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = ruta_destino
-                df_p.loc[df_p["ID"] == row["ID"], "RutaExcel"] = ruta_excel_final
-                df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = (
+                df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = str(
+                    ruta_destino
+                )
+                df_p.loc[df_p["ID"] == row["ID"], "RutaExcel"] = str(
+                    ruta_excel_final
+                )
+                df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(
                     ruta_cert_final
                 )
                 guardar_pendientes(df_p)
@@ -563,12 +592,12 @@ with tab3:
 
         # Botón para descargar el Excel oficial
         with col_d1:
-          if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and os.path.exists(str(row["RutaExcel"])):
+          if "RutaExcel" in row and pd.notna(row["RutaExcel"]) and str(row["RutaExcel"]).strip() != "" and os.path.exists(str(row["RutaExcel"])):
             with open(row["RutaExcel"], "rb") as f:
               st.download_button(
                   label="📊 Descargar Checklist Excel Oficial",
                   data=f,
-                  file_name=os.path.basename(row["RutaExcel"]),
+                  file_name=os.path.basename(str(row["RutaExcel"])),
                   mime=(
                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   ),
@@ -579,12 +608,12 @@ with tab3:
 
         # Botón para descargar el PDF del Certificado firmado
         with col_d2:
-          if "RutaPdfCert" in row and pd.notna(row["RutaPdfCert"]) and os.path.exists(str(row["RutaPdfCert"])):
+          if "RutaPdfCert" in row and pd.notna(row["RutaPdfCert"]) and str(row["RutaPdfCert"]).strip() != "" and os.path.exists(str(row["RutaPdfCert"])):
             with open(row["RutaPdfCert"], "rb") as f:
               st.download_button(
                   label="📄 Descargar Certificado Firmado (PDF)",
                   data=f,
-                  file_name=os.path.basename(row["RutaPdfCert"]),
+                  file_name=os.path.basename(str(row["RutaPdfCert"])),
                   mime="application/pdf",
                   key=f"dl_pdf_{row['ID']}",
               )
