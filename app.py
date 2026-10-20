@@ -574,8 +574,8 @@ if archivo_catalogo_nuevo is not None:
   df_db.columns = df_db.columns.str.strip()
   st.sidebar.success("¡Catálogo actualizado!")
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📝 1. Ingreso de Operador", "✍️ 2. Panel de Calidad", "🔍 3. Trazabilidad", "📊 4. Control Excel"
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📝 1. Ingreso de Operador", "✍️ 2. Panel de Calidad", "🔍 3. Trazabilidad", "📁 4. Explorador de Archivos", "📊 5. Control Excel"
 ])
 
 # ------------------------------------------
@@ -959,9 +959,83 @@ with tab3:
             st.rerun()
 
 # ------------------------------------------
-# PESTAÑA 4: CONTROL EXCEL (GERENCIAL)
+# PESTAÑA 4: EXPLORADOR DE ARCHIVOS (ESTILO CARPETA WINDOWS CON BUSCADOR)
 # ------------------------------------------
 with tab4:
+  st.header("📁 Explorador de Archivos Corporativo")
+  st.markdown("Navegue por las carpetas de plantas y materiales o utilice el buscador integrado para localizar registros específicos.")
+  
+  df_p = cargar_pendientes()
+  aprobados_exp = df_p[df_p["Estado"] == "Aprobado"] if not df_p.empty else pd.DataFrame()
+
+  if len(aprobados_exp) == 0:
+    st.info("No hay registros aprobados para mostrar en el explorador.")
+  else:
+    # Barra de búsqueda integrada en el explorador
+    busqueda_exp = st.text_input("🔍 Buscar dentro del Explorador (Material, Lote o Proveedor)", placeholder="Escriba para filtrar carpetas...")
+    
+    df_filtrado_exp = aprobados_exp.copy()
+    if busqueda_exp:
+      df_filtrado_exp = df_filtrado_exp[
+          df_filtrado_exp["Planta"].astype(str).str.contains(busqueda_exp, case=False, na=False) |
+          df_filtrado_exp["LoteProveedor"].astype(str).str.contains(busqueda_exp, case=False, na=False) |
+          df_filtrado_exp["NombreMaterial"].astype(str).str.contains(busqueda_exp, case=False, na=False) |
+          df_filtrado_exp["Proveedor"].astype(str).str.contains(busqueda_exp, case=False, na=False)
+      ]
+
+    if len(df_filtrado_exp) == 0:
+      st.warning("⚠️ No se encontraron coincidencias con el término de búsqueda en el explorador.")
+    else:
+      # Nivel 1: Plantas disponibles
+      plantas_disponibles = df_filtrado_exp["Planta"].dropna().unique()
+      
+      for planta in plantas_disponibles:
+        df_planta_exp = df_filtrado_exp[df_filtrado_exp["Planta"] == planta]
+        
+        with st.expander(f"📁 Planta: {planta} ({len(df_planta_exp)} registros)"):
+          # Nivel 2: Materiales dentro de esta planta
+          materiales_disponibles = df_planta_exp["NombreMaterial"].dropna().unique()
+          
+          for material in materiales_disponibles:
+            df_material_exp = df_planta_exp[df_planta_exp["NombreMaterial"] == material]
+            
+            with st.expander(f"📂 Material: {material} ({len(df_material_exp)} lotes)"):
+              # Nivel 3: Registros / Lotes individuales ordenados
+              for idx_exp, row_exp in df_material_exp.iterrows():
+                lote_exp = row_exp.get("LoteProveedor", "S/Lote")
+                fecha_exp = str(row_exp.get("IngresoSAP", "S/Fecha"))
+                proveedor_exp = row_exp.get("Proveedor", "N/A")
+                
+                st.markdown(f"""
+                <div style='background-color: #f1f3f5; padding: 8px 12px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #0066cc;'>
+                    <b>Lote:</b> {lote_exp} | <b>Proveedor:</b> {proveedor_exp} | <b>Ingreso SAP:</b> {fecha_exp}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                nombre_mat_d = str(row_exp.get('NombreMaterial', 'Material')).replace("/", "_")
+                lote_d = str(row_exp.get('LoteProveedor', 'Lote')).replace("/", "_")
+                fecha_d = str(row_exp.get('IngresoSAP', 'Fecha')).replace("/", "-")
+                base_d = f"{nombre_mat_d}_{lote_d}_{fecha_d}"
+                
+                col_ex1, col_ex2 = st.columns(2)
+                ruta_chk_exp = str(row_exp.get("RutaChecklistOficial", ""))
+                with col_ex1:
+                  if pd.notna(ruta_chk_exp) and ruta_chk_exp != "nan" and os.path.exists(ruta_chk_exp):
+                    with open(ruta_chk_exp, "rb") as f_chk:
+                      st.download_button("📊 Descargar PDF Maestro Unificado", data=f_chk, file_name=f"{base_d}.pdf", mime="application/pdf", key=f"exp_chk_{row_exp['ID']}")
+                
+                ruta_cert_exp = str(row_exp.get("RutaPdfCert", ""))
+                with col_ex2:
+                  if pd.notna(ruta_cert_exp) and ruta_cert_exp != "nan" and os.path.exists(ruta_cert_exp):
+                    ext_c = os.path.splitext(ruta_cert_exp)[1]
+                    with open(ruta_cert_exp, "rb") as f_cer:
+                      st.download_button("📄 Descargar Certificado Original", data=f_cer, file_name=f"Certificado_{base_d}{ext_c}", mime="application/pdf" if ruta_cert_exp.endswith(".pdf") else "image/jpeg", key=f"exp_cert_{row_exp['ID']}")
+                st.markdown("---")
+
+# ------------------------------------------
+# PESTAÑA 5: CONTROL EXCEL (GERENCIAL)
+# ------------------------------------------
+with tab5:
   st.header("📊 Control de Ingresos a Detalle")
   df_p = cargar_pendientes()
   aprobados_excel = df_p[df_p["Estado"] == "Aprobado"].copy() if not df_p.empty else pd.DataFrame()
