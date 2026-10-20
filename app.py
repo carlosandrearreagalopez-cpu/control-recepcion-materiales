@@ -418,14 +418,14 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.set_font('Arial', '', 7)
         pdf.cell(57, h_row, accion, 1, 1, 'C')
         
-    # --- TEMPERATURAS (PREGUNTA 13) ---
+    # --- TEMPERATURAS (PREGUNTA 14) ---
     temp_trans = str(row.get('TempTransporte', 'N/A'))
     temp_mat = str(row.get('TempMaterial', 'N/A'))
     
     y_curr = pdf.get_y()
     pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(5, h_row, '13', 'LTR', 0, 'C')
+    pdf.cell(5, h_row, '14', 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
     pdf.cell(130, h_row, 'Si el material es perecedero, ¿el transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
     pdf.cell(55, h_row, '', 'LTR', 0)
@@ -451,11 +451,11 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(30, h_row, '', 'BR', 0)
     pdf.cell(57, h_row, '', 'BR', 1)
 
-    # --- PREGUNTA 14: LIBRE DE OLORES EXTRAÑOS ---
+    # --- PREGUNTA 15: LIBRE DE OLORES EXTRAÑOS ---
     y_curr = pdf.get_y()
     pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(5, h_row, '14', 1, 0, 'C')
+    pdf.cell(5, h_row, '15', 1, 0, 'C')
     pdf.set_font('Arial', '', 7)
     pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
     pdf.cell(55, h_row, '', 1, 0)
@@ -468,14 +468,14 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', '', 7)
     pdf.cell(57, h_row, "Retener lote y emitir reclamo", 1, 1, 'C')
 
-    # --- PREGUNTA 15: TARIMA DE USO RETORNABLE ---
+    # --- PREGUNTA 16: TARIMA DE USO RETORNABLE ---
     est_tarima = str(row.get('EstadoTarima', 'SI'))
     idx_tarima = 0 if est_tarima == 'SI' else (1 if est_tarima == 'NO' else 2)
 
     y_curr = pdf.get_y()
     pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(5, h_row, '15', 1, 0, 'C')
+    pdf.cell(5, h_row, '16', 1, 0, 'C')
     pdf.set_font('Arial', '', 7)
     pdf.cell(130, h_row, '¿La tarima de uso retornable se encuentra en buenas condiciones y estado inocuo?', 1, 0, 'L')
     pdf.cell(55, h_row, '', 1, 0)
@@ -641,7 +641,7 @@ with tab1:
       with m2:
         estado_candado = st.selectbox("¿El candado se encuentra alterado?", ["NO", "SI", "N/A"])
 
-      # Selección del estado de la tarima (Pregunta 15)
+      # Selección del estado de la tarima (Pregunta 16)
       estado_tarima = st.selectbox("¿La tarima de uso retornable se encuentra en buenas condiciones y estado inocuo?", ["SI", "NO", "N/A"])
 
       c4, c5 = st.columns(2)
