@@ -418,35 +418,55 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.set_font('Arial', '', 7)
         pdf.cell(57, h_row, accion, 1, 1, 'C')
         
-    # --- TEMPERATURAS ---
+    # --- TEMPERATURAS (PREGUNTA 13) ---
     temp_trans = str(row.get('TempTransporte', 'N/A'))
     temp_mat = str(row.get('TempMaterial', 'N/A'))
     
     y_curr = pdf.get_y()
     pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
-    pdf.cell(5, h_row, '14', 'LTR', 0, 'C')
+    pdf.cell(5, h_row, '13', 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 'LTR', 0, 'L')
+    pdf.cell(130, h_row, 'Si el material es perecedero, ¿el transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
     pdf.cell(55, h_row, '', 'LTR', 0)
     
-    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO"], 0)
+    idx_temp = 2 if (temp_trans == "N/A" or temp_trans == "nan" or not temp_trans) else 0
+    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
     
     pdf.set_xy(200, y_curr)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(30, h_row, "SI", 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(57, h_row, "Rechazar lote", 'LTR', 1, 'C')
+    pdf.cell(57, h_row, "Rechazar lote y emitir reclamo", 'LTR', 1, 'C')
 
     y_curr = pdf.get_y()
     pdf.set_xy(10, y_curr)
     pdf.cell(5, h_row, '', 'LBR', 0)
     pdf.set_font('Arial', 'B', 7)
     txt_temps = f"Temperatura Transporte (°C): {temp_trans if temp_trans!='nan' else 'N/A'}         Temperatura del Material (°C): {temp_mat if temp_mat!='nan' else 'N/A'}"
+    if idx_temp == 2:
+        txt_temps = "Temperatura Transporte (°C): N/A         Temperatura del Material (°C): N/A"
     pdf.cell(130, h_row, txt_temps, 'BR', 0, 'C')
     pdf.cell(55, h_row, '', 'BR', 0)
     pdf.cell(30, h_row, '', 'BR', 0)
     pdf.cell(57, h_row, '', 'BR', 1)
+
+    # --- PREGUNTA 14: LIBRE DE OLORES EXTRAÑOS ---
+    y_curr = pdf.get_y()
+    pdf.set_xy(10, y_curr)
+    pdf.set_font('Arial', 'B', 7)
+    pdf.cell(5, h_row, '14', 1, 0, 'C')
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
+    pdf.cell(55, h_row, '', 1, 0)
+    
+    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO"], 0) 
+    
+    pdf.set_xy(200, y_curr)
+    pdf.set_font('Arial', 'B', 7)
+    pdf.cell(30, h_row, "SI", 1, 0, 'C')
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(57, h_row, "Retener lote y emitir reclamo", 1, 1, 'C')
 
     # --- PREGUNTA 15: TARIMA DE USO RETORNABLE ---
     est_tarima = str(row.get('EstadoTarima', 'SI'))
