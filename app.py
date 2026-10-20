@@ -819,6 +819,10 @@ with tab2:
                 tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace("\\", "_")
                 nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace("\\", "_")
                 lote_safe = str(row.get("LoteProveedor", "Lote")).replace("/", "_").replace("\\", "_")
+                fecha_safe = str(row.get("IngresoSAP", "")).replace("/", "-")
+                
+                # Nombre base formato: Material_Lote_Fecha
+                nombre_base_archivo = f"{nombre_mat_safe}_{lote_safe}_{fecha_safe}"
                 
                 subcarpeta_lote = f"Lote_{lote_safe}_{nombre_mat_safe}"
                 ruta_destino = os.path.join(carpeta_base, planta_safe, tipo_mat_safe, nombre_mat_safe, subcarpeta_lote)
@@ -829,7 +833,7 @@ with tab2:
 
                 ruta_cert_origen = str(row.get("RutaPdfCert", ""))
                 ext_cert = os.path.splitext(ruta_cert_origen)[1] if ruta_cert_origen and ruta_cert_origen != "nan" else ".pdf"
-                ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{lote_safe}{ext_cert}")
+                ruta_cert_final = os.path.join(ruta_destino, f"Certificado_{nombre_base_archivo}{ext_cert}")
                 
                 try:
                     if ruta_cert_origen and ruta_cert_origen != "nan" and os.path.exists(ruta_cert_origen):
@@ -839,10 +843,10 @@ with tab2:
                 except Exception:
                     ruta_cert_final = ""
 
-                ruta_checklist_temp = os.path.join(ruta_destino, f"TEMP_Checklist_{lote_safe}.pdf")
+                ruta_checklist_temp = os.path.join(ruta_destino, f"TEMP_{nombre_base_archivo}.pdf")
                 generar_pdf_ricc14(row, nombre_supervisor, ruta_checklist_temp)
 
-                ruta_unificada = os.path.join(ruta_destino, f"Registro_Auditoria_{lote_safe}.pdf")
+                ruta_unificada = os.path.join(ruta_destino, f"{nombre_base_archivo}.pdf")
                 if ruta_cert_final and os.path.exists(ruta_cert_final):
                     generar_documento_unificado(ruta_checklist_temp, ruta_cert_final, ruta_unificada)
                 else:
@@ -902,18 +906,26 @@ with tab3:
       planta_val = row.get('Planta', 'N/A')
       fecha_rec = str(row.get('IngresoSAP', 'N/A'))
       with st.expander(f"📁 Planta: {planta_val} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Ingreso SAP: {fecha_rec}"):
+        
+        # Nombres limpios para descarga
+        nombre_mat_descarga = str(row.get('NombreMaterial', 'Material')).replace("/", "_").replace("\\", "_")
+        lote_descarga = str(row.get('LoteProveedor', 'Lote')).replace("/", "_").replace("\\", "_")
+        fecha_descarga = str(row.get('IngresoSAP', 'Fecha')).replace("/", "-")
+        nombre_descarga_base = f"{nombre_mat_descarga}_{lote_descarga}_{fecha_descarga}"
+
         col_d1, col_d2, col_d3 = st.columns(3)
         ruta_chk = str(row.get("RutaChecklistOficial", ""))
         with col_d1:
           if pd.notna(ruta_chk) and ruta_chk != "nan" and os.path.exists(ruta_chk):
             with open(ruta_chk, "rb") as f:
-              st.download_button("📊 Descargar PDF Maestro Unificado", data=f, file_name=os.path.basename(ruta_chk), mime="application/pdf", key=f"dl_chk_{row['ID']}")
+              st.download_button("📊 Descargar PDF Maestro Unificado", data=f, file_name=f"{nombre_descarga_base}.pdf", mime="application/pdf", key=f"dl_chk_{row['ID']}")
         
         ruta_cert = str(row.get("RutaPdfCert", ""))
         with col_d2:
           if pd.notna(ruta_cert) and ruta_cert != "nan" and os.path.exists(ruta_cert):
+            ext_cert_dl = os.path.splitext(ruta_cert)[1]
             with open(ruta_cert, "rb") as f:
-              st.download_button("📄 Descargar Certificado Original", data=f, file_name=os.path.basename(ruta_cert), mime="application/pdf" if ruta_cert.endswith(".pdf") else "image/jpeg", key=f"dl_cert_{row['ID']}")
+              st.download_button("📄 Descargar Certificado Original", data=f, file_name=f"Certificado_{nombre_descarga_base}{ext_cert_dl}", mime="application/pdf" if ruta_cert.endswith(".pdf") else "image/jpeg", key=f"dl_cert_{row['ID']}")
         
         with col_d3:
           if st.button("🗑️ Borrar", key=f"del_apr_{row['ID']}"):
