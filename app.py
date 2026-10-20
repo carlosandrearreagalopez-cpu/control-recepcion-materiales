@@ -109,7 +109,7 @@ def cargar_pendientes():
         "IngresoSAP", "DocSAP", "EstadoMarchamo", "Marchamo", "EstadoCandado",
         "Cantidad", "Unidad", "TempTransporte", "TempMaterial", "FechaProduccion", "FechaVencimiento",
         "Criticidad", "Responsable", "Fecha", "Estado", "FirmaCalidad",
-        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert", "RutaFirmaOp", "RutaFirmaSup"
+        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert", "RutaFirmaOp", "RutaFirmaSup", "EstadoTarima"
     ]
     for col in columnas_texto:
       if col not in df.columns:
@@ -128,7 +128,7 @@ def cargar_pendientes():
         "IngresoSAP", "DocSAP", "EstadoMarchamo", "Marchamo", "EstadoCandado", "Cantidad",
         "Unidad", "TempTransporte", "TempMaterial", "FechaProduccion", "FechaVencimiento",
         "Criticidad", "Responsable", "Fecha", "Estado", "FirmaCalidad",
-        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert", "RutaFirmaOp", "RutaFirmaSup"
+        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert", "RutaFirmaOp", "RutaFirmaSup", "EstadoTarima"
     ])
 
 def guardar_pendientes(df):
@@ -427,11 +427,10 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(5, h_row, '14', 'LTR', 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(130, h_row, '¿El transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
+    pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 'LTR', 0, 'L')
     pdf.cell(55, h_row, '', 'LTR', 0)
     
-    idx_temp = 2 if (temp_trans == "N/A" or temp_trans == "nan" or not temp_trans) else 0
-    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
+    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO"], 0)
     
     pdf.set_xy(200, y_curr)
     pdf.set_font('Arial', 'B', 7)
@@ -444,28 +443,30 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(5, h_row, '', 'LBR', 0)
     pdf.set_font('Arial', 'B', 7)
     txt_temps = f"Temperatura Transporte (°C): {temp_trans if temp_trans!='nan' else 'N/A'}         Temperatura del Material (°C): {temp_mat if temp_mat!='nan' else 'N/A'}"
-    if idx_temp == 2:
-        txt_temps = "Temperatura Transporte (°C): N/A         Temperatura del Material (°C): N/A"
     pdf.cell(130, h_row, txt_temps, 'BR', 0, 'C')
     pdf.cell(55, h_row, '', 'BR', 0)
     pdf.cell(30, h_row, '', 'BR', 0)
     pdf.cell(57, h_row, '', 'BR', 1)
+
+    # --- PREGUNTA 15: TARIMA DE USO RETORNABLE ---
+    est_tarima = str(row.get('EstadoTarima', 'SI'))
+    idx_tarima = 0 if est_tarima == 'SI' else (1 if est_tarima == 'NO' else 2)
 
     y_curr = pdf.get_y()
     pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(5, h_row, '15', 1, 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
+    pdf.cell(130, h_row, '¿La tarima de uso retornable se encuentra en buenas condiciones y estado inocuo?', 1, 0, 'L')
     pdf.cell(55, h_row, '', 1, 0)
     
-    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO"], 0) 
+    dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_tarima)
     
     pdf.set_xy(200, y_curr)
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(30, h_row, "SI", 1, 0, 'C')
     pdf.set_font('Arial', '', 7)
-    pdf.cell(57, h_row, "Rechazar lote", 1, 1, 'C')
+    pdf.cell(57, h_row, "Rechazar lote y emitir reclamo", 1, 1, 'C')
 
     pdf.ln(2)
     
@@ -620,6 +621,9 @@ with tab1:
       with m2:
         estado_candado = st.selectbox("¿El candado se encuentra alterado?", ["NO", "SI", "N/A"])
 
+      # Selección del estado de la tarima (Pregunta 15)
+      estado_tarima = st.selectbox("¿La tarima de uso retornable se encuentra en buenas condiciones y estado inocuo?", ["SI", "NO", "N/A"])
+
       c4, c5 = st.columns(2)
       with c4:
         cantidad = st.number_input("Cantidad Recibida", min_value=0.0, format="%.2f")
@@ -667,6 +671,7 @@ with tab1:
             "NombreMaterial": material_sel, "FacturaGuia": factura_guia, "Transporte": proveedor_sel, 
             "Placa": placa_transporte, "IngresoSAP": str(ingreso_sap), "DocSAP": doc_sap,
             "EstadoMarchamo": estado_marchamo, "Marchamo": marchamo, "EstadoCandado": estado_candado,
+            "EstadoTarima": estado_tarima,
             "Lote": lote_proveedor, "Cantidad": cantidad, "Unidad": unidad, 
             "TempTransporte": str(temp_trans), "TempMaterial": str(temp_mat),
             "Produccion": str(fecha_produccion), "Vencimiento": str(fecha_vencimiento),
@@ -702,6 +707,7 @@ with tab1:
               nuevo_lote = st.text_input("Lote del Proveedor", value=item_actual['Lote'])
               nueva_factura = st.text_input("No. de Factura/Guía", value=item_actual['FacturaGuia'])
               nueva_cantidad = st.number_input("Cantidad Recibida", min_value=0.0, value=float(item_actual['Cantidad']), format="%.2f")
+              nuevo_estado_tarima = st.selectbox("¿La tarima de uso retornable se encuentra en buenas condiciones y estado inocuo?", ["SI", "NO", "N/A"], index=0 if item_actual.get('EstadoTarima','SI')=='SI' else (1 if item_actual.get('EstadoTarima')=='NO' else 2))
               
               temp_trans_edit = item_actual['TempTransporte']
               temp_mat_edit = item_actual['TempMaterial']
@@ -717,6 +723,7 @@ with tab1:
                   st.session_state.items_ingreso_actual[idx_editar]['Lote'] = nuevo_lote
                   st.session_state.items_ingreso_actual[idx_editar]['FacturaGuia'] = nueva_factura
                   st.session_state.items_ingreso_actual[idx_editar]['Cantidad'] = nueva_cantidad
+                  st.session_state.items_ingreso_actual[idx_editar]['EstadoTarima'] = nuevo_estado_tarima
                   if temp_trans_edit != "N/A":
                       st.session_state.items_ingreso_actual[idx_editar]['TempTransporte'] = temp_trans_edit
                       st.session_state.items_ingreso_actual[idx_editar]['TempMaterial'] = temp_mat_edit
@@ -756,7 +763,7 @@ with tab1:
               "FacturaGuia": str(item["FacturaGuia"]), "Transporte": str(item["Transporte"]),
               "Placa": str(item["Placa"]), "IngresoSAP": str(item["IngresoSAP"]), "DocSAP": str(item["DocSAP"]),
               "EstadoMarchamo": str(item["EstadoMarchamo"]), "Marchamo": str(item["Marchamo"]),
-              "EstadoCandado": str(item["EstadoCandado"]), "LoteProveedor": str(item["Lote"]),
+              "EstadoCandado": str(item["EstadoCandado"]), "EstadoTarima": str(item.get("EstadoTarima", "SI")), "LoteProveedor": str(item["Lote"]),
               "Cantidad": item["Cantidad"], "Unidad": str(item["Unidad"]), 
               "TempTransporte": str(item["TempTransporte"]), "TempMaterial": str(item["TempMaterial"]),
               "FechaProduccion": str(item["Produccion"]), "FechaVencimiento": str(item["Vencimiento"]),
@@ -821,7 +828,6 @@ with tab2:
                 lote_safe = str(row.get("LoteProveedor", "Lote")).replace("/", "_").replace("\\", "_")
                 fecha_safe = str(row.get("IngresoSAP", "")).replace("/", "-")
                 
-                # Nombre base formato: Material_Lote_Fecha
                 nombre_base_archivo = f"{nombre_mat_safe}_{lote_safe}_{fecha_safe}"
                 
                 subcarpeta_lote = f"Lote_{lote_safe}_{nombre_mat_safe}"
@@ -907,9 +913,8 @@ with tab3:
       fecha_rec = str(row.get('IngresoSAP', 'N/A'))
       with st.expander(f"📁 Planta: {planta_val} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Ingreso SAP: {fecha_rec}"):
         
-        # Nombres limpios para descarga
-        nombre_mat_descarga = str(row.get('NombreMaterial', 'Material')).replace("/", "_").replace("\\", "_")
-        lote_descarga = str(row.get('LoteProveedor', 'Lote')).replace("/", "_").replace("\\", "_")
+        nombre_mat_descarga = str(row.get('NombreMaterial', 'Material')).replace("/", "_")
+        lote_descarga = str(row.get('LoteProveedor', 'Lote')).replace("/", "_")
         fecha_descarga = str(row.get('IngresoSAP', 'Fecha')).replace("/", "-")
         nombre_descarga_base = f"{nombre_mat_descarga}_{lote_descarga}_{fecha_descarga}"
 
@@ -947,7 +952,7 @@ with tab4:
     columnas_reporte = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor", "LoteProveedor", 
         "FacturaGuia", "Placa", "IngresoSAP", "DocSAP", "EstadoMarchamo", "Marchamo",
-        "Cantidad", "Unidad", "TempTransporte", "TempMaterial", "Criticidad", "Responsable", "FirmaCalidad"
+        "EstadoTarima", "Cantidad", "Unidad", "TempTransporte", "TempMaterial", "Criticidad", "Responsable", "FirmaCalidad"
     ]
     df_reporte = aprobados_excel[columnas_reporte].copy()
     st.dataframe(df_reporte, use_container_width=True)
