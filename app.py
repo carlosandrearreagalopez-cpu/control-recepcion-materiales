@@ -612,7 +612,7 @@ with tab1:
     palabras_clave_empaque = ["envase", "etiqueta", "tapa", "botella", "caja", "bolsa", "film", "saco", "precinto", "carton"]
     es_empaque = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_empaque)
 
-    # Lógica solicitada: Si dice Aceite o es empaque, no requiere temperatura
+    # Lógica de temperatura: Si dice Aceite o es empaque, no requiere temperatura
     es_aceite = "aceite" in str(material_sel).lower() or "aceite" in str(tipo_mat_sel).lower()
     
     if es_empaque or es_aceite:
@@ -620,6 +620,10 @@ with tab1:
     else:
         palabras_clave_temp = ["pulpa", "concentrado", "leche", "refrigerado", "congelado", "fresco", "crema", "mantequilla", "queso", "carne", "pollo", "embutido"]
         requiere_temperatura = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_temp)
+
+    # Excepción para COA: Si el material seleccionado contiene coco, naranja valencia hn o mora
+    mat_lower = str(material_sel).lower()
+    exime_coa = "coco" in mat_lower or "naranja valencia hn" in mat_lower or "mora" in mat_lower
 
     with st.form("form_item_recepcion"):
       st.subheader("Datos de Transporte, SAP y Lote")
@@ -673,21 +677,30 @@ with tab1:
         st.info("ℹ️ Este material no requiere control de temperatura (se registrará automáticamente como N/A).")
 
       st.markdown("---")
-      certificado_file = st.file_uploader("Subir Archivo del Certificado (PDF Recomendado)", type=["jpg", "jpeg", "png", "pdf"])
+      if exime_coa:
+          st.info("ℹ️ Este material (Coco / Naranja Valencia HN / Mora) no requiere adjuntar COA obligatoriamente.")
+          certificado_file = st.file_uploader("Subir Archivo del Certificado / COA (Opcional)", type=["jpg", "jpeg", "png", "pdf"])
+      else:
+          certificado_file = st.file_uploader("Subir Archivo del Certificado / COA (Obligatorio)", type=["jpg", "jpeg", "png", "pdf"])
 
       agregar_item = st.form_submit_button("➕ Agregar producto a la lista")
 
     if agregar_item:
       if not lote_proveedor or not factura_guia:
         st.warning("⚠️ Debes ingresar el número de factura/guía y el número de lote.")
-      elif certificado_file is None:
-        st.warning("⚠️ Es obligatorio adjuntar el archivo del certificado.")
+      elif certificado_file is None and not exime_coa:
+        st.warning("⚠️ Es obligatorio adjuntar el archivo del certificado para este material.")
       else:
-        os.makedirs("temp_certificados", exist_ok=True)
-        nombre_archivo_unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{certificado_file.name}"
-        ruta_cert_temp = os.path.join("temp_certificados", nombre_archivo_unico)
-        with open(ruta_cert_temp, "wb") as f:
-          f.write(certificado_file.getbuffer())
+        ruta_cert_temp = ""
+        nombre_cert_str = "Sin certificado"
+        
+        if certificado_file is not None:
+            os.makedirs("temp_certificados", exist_ok=True)
+            nombre_archivo_unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{certificado_file.name}"
+            ruta_cert_temp = os.path.join("temp_certificados", nombre_archivo_unico)
+            with open(ruta_cert_temp, "wb") as f:
+              f.write(certificado_file.getbuffer())
+            nombre_cert_str = certificado_file.name
 
         nuevo_item = {
             "Planta": planta_sel, "TipoMaterial": tipo_mat_sel, "Proveedor": proveedor_sel,
@@ -699,10 +712,10 @@ with tab1:
             "TempTransporte": str(temp_trans), "TempMaterial": str(temp_mat),
             "Produccion": str(fecha_produccion), "Vencimiento": str(fecha_vencimiento),
             "Criticidad": criticidad_val, "RutaTemp": ruta_cert_temp,
-            "NombreCertificado": certificado_file.name
+            "NombreCertificado": nombre_cert_str
         }
         st.session_state.items_ingreso_actual.append(nuevo_item)
-        st.success("✅ ¡Producto agregado y certificado cargado correctamente!")
+        st.success("✅ ¡Producto agregado correctamente!")
 
     if len(st.session_state.items_ingreso_actual) > 0:
       st.markdown("---")
