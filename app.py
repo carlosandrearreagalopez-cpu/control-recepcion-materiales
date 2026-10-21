@@ -102,26 +102,32 @@ inicializar_db()
 # ------------------------------------------
 def subir_a_google_drive(ruta_archivo_local, nombre_destino):
     if not GOOGLE_DRIVE_DISPONIBLE:
-        st.error("⚠️ Las librerías de Google Drive no están instaladas en requirements.txt (google-api-python-client, google-auth).")
+        st.error("⚠️ Las librerías de Google Drive no están instaladas.")
         return None
     try:
         SCOPES = ['https://www.googleapis.com/auth/drive']
+        import json
         
-        # Cargar credenciales desde st.secrets (Nube) o credentials.json (Local)
-        if hasattr(st, "secrets") and "google_json" in st.secrets:
-            creds_dict = json.loads(st.secrets["google_json"])
-            creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-        elif hasattr(st, "secrets") and "google_credentials" in st.secrets:
-            creds_dict = dict(st.secrets["google_credentials"])
-            creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-        elif os.path.exists(CREDENTIALS_FILE):
+        creds = None
+        if hasattr(st, "secrets"):
+            if "google_json" in st.secrets:
+                raw_json = st.secrets["google_json"]
+                creds_dict = json.loads(raw_json)
+                creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+            elif "google_credentials" in st.secrets:
+                creds_dict = dict(st.secrets["google_credentials"])
+                if "private_key" in creds_dict:
+                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+                
+        if not creds and os.path.exists(CREDENTIALS_FILE):
             creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
-        else:
-            st.error("❌ FALTA DE CREDENCIALES: No se encontró 'credentials.json' ni la variable 'google_json' en st.secrets de Streamlit Cloud.")
+            
+        if not creds:
+            st.error("❌ No se encontraron credenciales válidas en st.secrets ni en credentials.json.")
             return None
 
         service = build('drive', 'v3', credentials=creds)
-
         file_metadata = {'name': nombre_destino}
         media = MediaFileUpload(ruta_archivo_local, resumable=True)
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
