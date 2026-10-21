@@ -106,9 +106,8 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         return None
     try:
         SCOPES = ['https://www.googleapis.com/auth/drive']
-        import json
-        from google.oauth2 import service_account
         
+        # Cargar credenciales directo desde st.secrets
         creds_dict = None
         if hasattr(st, "secrets"):
             if "google_json" in st.secrets:
@@ -117,7 +116,8 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
             elif "google_credentials" in st.secrets:
                 creds_dict = dict(st.secrets["google_credentials"])
                 if "private_key" in creds_dict:
-                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                    creds_dict["private_key"] = creds_dict["private_key"].replace("\n", "
+")
                     
         if not creds_dict and os.path.exists(CREDENTIALS_FILE):
             with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f_cred:
