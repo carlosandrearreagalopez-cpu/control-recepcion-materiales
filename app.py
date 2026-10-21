@@ -41,7 +41,7 @@ CONTRASENA_SISTEMA = "Lif1012"
 CORREO_NOTIFICACION = "carreaga@lifbrands.co"
 
 # ------------------------------------------
-# INTERFAZ DE AUTENTICACIÓN INICIAL (LIF) - ÚNICA VEZ
+# INTERFAZ DE AUTENTICACIÓN INICIAL (LIF)
 # ------------------------------------------
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -71,18 +71,16 @@ if not st.session_state.autenticado:
     
     st.stop()
 
-# --- TÍTULO PRINCIPAL DESPUÉS DE INGRESAR ---
 st.title("📦 Sistema de Trazabilidad y Control de Calidad - LIF")
 st.markdown("---")
 
 # ------------------------------------------
-# FUNCIONES DE DATOS, FIRMAS Y CORREO OUTLOOK
+# FUNCIONES DE DATOS Y RESPALDO
 # ------------------------------------------
 def enviar_notificacion_outlook(asunto, cuerpo_mensaje):
     remitente = CORREO_NOTIFICACION
     password = "tu_contraseña_o_app_password"
     destinatario = CORREO_NOTIFICACION
-    
     try:
         mensaje = MIMEMultipart()
         mensaje["From"] = remitente
@@ -133,6 +131,8 @@ def cargar_pendientes():
 
 def guardar_pendientes(df):
   df.to_csv(ARCHIVO_PENDIENTES, index=False)
+  # Respaldo automático instantáneo para que NADA se pierda ante reinicios
+  df.to_csv("registros_pendientes_respaldo.csv", index=False)
 
 def guardar_firma(canvas_result, prefix):
     if canvas_result is not None:
@@ -141,12 +141,10 @@ def guardar_firma(canvas_result, prefix):
             if data is not None and np.any(data):
                 os.makedirs("temp_firmas", exist_ok=True)
                 ruta_firma = f"temp_firmas/{prefix}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
-                
                 rgba_image = Image.fromarray(data.astype('uint8'), 'RGBA')
                 background = Image.new('RGBA', rgba_image.size, (255, 255, 255, 255))
                 alpha_composite = Image.alpha_composite(background, rgba_image)
                 rgb_image = alpha_composite.convert('RGB')
-                
                 rgb_image.save(ruta_firma, "PNG")
                 return ruta_firma
         except Exception:
@@ -158,7 +156,6 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
         from pypdf import PdfWriter
         merger = PdfWriter()
         merger.append(ruta_checklist)
-        
         if ruta_certificado and os.path.exists(ruta_certificado):
             if ruta_certificado.lower().endswith(('.png', '.jpg', '.jpeg')):
                 img = Image.open(ruta_certificado).convert('RGB')
@@ -178,9 +175,6 @@ def generar_documento_unificado(ruta_checklist, ruta_certificado, ruta_final):
     except Exception:
         shutil.copy(ruta_checklist, ruta_final)
 
-# ------------------------------------------
-# MOTOR DE GENERACIÓN PDF
-# ------------------------------------------
 def dibujar_opciones_cabecera(pdf, x_start, y, h_row, opts, idx_checked, step=12.0):
     curr_x = x_start
     for i, opt in enumerate(opts):
@@ -207,11 +201,9 @@ def dibujar_opciones_bloque(pdf, x_start, y, h_row, opts, idx_checked):
         text_x = sub_x + (espacio_item - (w_texto + 4.5)) / 2
         pdf.set_xy(text_x, y)
         pdf.cell(w_texto, h_row, opt, 0, 0, 'L')
-        
         box_x = text_x + w_texto + 1.5
         box_y = y + (h_row - 3) / 2
         pdf.rect(box_x, box_y, 3, 3)
-        
         if i == idx_checked:
             pdf.set_xy(box_x, box_y)
             pdf.set_font('Arial', 'B', 7)
@@ -222,10 +214,8 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.add_page()
     pdf.set_auto_page_break(auto=False)
     pdf.set_fill_color(220, 230, 241) 
-    
     h_row = 4.5
     
-    # --- ENCABEZADO ---
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(35, h_row, 'Código:', 'LT', 0, 'R')
     pdf.set_font('Arial', '', 7)
@@ -245,7 +235,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(40, h_row, 'feb-23', 'LBR', 1, 'C')
     pdf.ln(1)
 
-    # --- DATOS GENERALES ---
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(35, h_row, 'Fecha de recepción:', 1, 0, 'R')
     pdf.set_font('Arial', '', 7)
@@ -279,7 +268,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(100, h_row, val_docsap if val_docsap != 'nan' else '', 1, 1, 'C')
     pdf.ln(2)
 
-    # --- MARCHAMO Y CANDADO ---
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(100, h_row, 'Inspección del Marchamo', 0, 0, 'L', fill=True)
     pdf.cell(5, h_row, '', 0, 0)
@@ -296,7 +284,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(10, y_start)
     pdf.cell(5, h_row, '1', 0, 0, 'C')
     pdf.cell(54, h_row, '¿El marchamo se encuentra alterado?', 0, 0)
-    
     est_mar = str(row.get('EstadoMarchamo', 'N/A'))
     idx_m = 0 if est_mar == 'SI' else (1 if est_mar == 'NO' else 2)
     dibujar_opciones_cabecera(pdf, 69, y_start, h_row, ['SI', 'NO', 'N/A'], idx_m, step=12.0)
@@ -320,7 +307,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(57, h_row, 'Retener lote y emitir reclamo.', 0, 1, 'C')
     pdf.ln(h_row/2 + 2)
 
-    # --- MATERIAL ---
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(190, h_row, 'Inspección del Material', 0, 0, 'L', fill=True)
     pdf.cell(30, h_row, 'Valor esperado', 0, 0, 'C', fill=True)
@@ -387,7 +373,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     pdf.ln(1)
 
-    # --- TRANSPORTE ---
     pdf.set_font('Arial', 'B', 7)
     pdf.cell(190, h_row, 'Inspección del Transporte', 0, 0, 'L', fill=True)
     pdf.cell(87, h_row, '', 0, 1)
@@ -407,7 +392,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.set_font('Arial', '', 7)
         pdf.cell(130, h_row, preg, 1, 0, 'L')
         pdf.cell(55, h_row, '', 1, 0)
-        
         dibujar_opciones_bloque(pdf, 145, y_curr, h_row, opts, 0)
 
         pdf.set_xy(200, y_curr)
@@ -416,7 +400,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
         pdf.set_font('Arial', '', 7)
         pdf.cell(57, h_row, accion, 1, 1, 'C')
         
-    # --- TEMPERATURAS ---
     temp_trans = str(row.get('TempTransporte', 'N/A'))
     temp_mat = str(row.get('TempMaterial', 'N/A'))
     
@@ -427,7 +410,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', '', 7)
     pdf.cell(130, h_row, 'Si el material es perecedero, ¿el transporte cumple con la temperatura especificada?', 'LTR', 0, 'L')
     pdf.cell(55, h_row, '', 'LTR', 0)
-    
     idx_temp = 2 if (temp_trans == "N/A" or temp_trans == "nan" or not temp_trans) else 0
     dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_temp)
     
@@ -449,7 +431,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(30, h_row, '', 'BR', 0)
     pdf.cell(57, h_row, '', 'BR', 1)
 
-    # --- PREGUNTA 15 ---
     y_curr = pdf.get_y()
     pdf.set_xy(10, y_curr)
     pdf.set_font('Arial', 'B', 7)
@@ -457,7 +438,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', '', 7)
     pdf.cell(130, h_row, '¿El transporte se encuentra libre de olores extraños?', 1, 0, 'L')
     pdf.cell(55, h_row, '', 1, 0)
-    
     dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO"], 0) 
     
     pdf.set_xy(200, y_curr)
@@ -466,7 +446,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', '', 7)
     pdf.cell(57, h_row, "Retener lote y emitir reclamo", 1, 1, 'C')
 
-    # --- PREGUNTA 16 ---
     est_tarima = str(row.get('EstadoTarima', 'SI'))
     idx_tarima = 0 if est_tarima == 'SI' else (1 if est_tarima == 'NO' else 2)
 
@@ -477,7 +456,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_font('Arial', '', 7)
     pdf.cell(130, h_row, '¿La tarima de uso retornable se encuentra en buenas condiciones y estado inocuo?', 1, 0, 'L')
     pdf.cell(55, h_row, '', 1, 0)
-    
     dibujar_opciones_bloque(pdf, 145, y_curr, h_row, ["SI", "NO", "N/A"], idx_tarima)
     
     pdf.set_xy(200, y_curr)
@@ -488,7 +466,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
 
     pdf.ln(2)
     
-    # --- RESULTADO Y OBSERVACIONES ---
     y_curr = pdf.get_y()
     pdf.rect(10, y_curr, 277, 8)
     pdf.set_xy(10, y_curr+2)
@@ -502,7 +479,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.cell(277, 3, '** Si el marchamo N/A por ser proveedores locales, basta con la inspección del material y del transporte.', 0, 1, 'L')
     pdf.cell(277, 3, '** Para los casos que se realiza la revisión en el transporte y determina que no cumple, PROCEDE A RECHAZARLOS.', 0, 1, 'L')
     
-    # --- ESPACIO DE FIRMAS ---
     pdf.ln(12) 
     y_linea1 = pdf.get_y()
 
@@ -512,14 +488,12 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(55, y_linea1 - 4)
     pdf.set_font('Arial', '', 8)
     pdf.cell(80, 4, str(row.get('Responsable', '')), 0, 0, 'C')
-    
     pdf.set_xy(175, y_linea1 - 4)
     pdf.cell(80, 4, supervisor, 0, 0, 'C')
 
     pdf.set_xy(10, y_linea1 - 0.5)
     pdf.set_font('Arial', 'B', 6.5)
     pdf.cell(43, 4, 'Nombre de la persona que realiza la recepción:', 0, 0, 'R')
-    
     pdf.set_xy(145, y_linea1 - 0.5)
     pdf.set_font('Arial', 'B', 8)
     pdf.cell(28, 4, 'Vo. Bo. Calidad:', 0, 0, 'R')
@@ -531,7 +505,6 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.set_xy(35, y_linea2 - 1)
     pdf.set_font('Arial', 'B', 8)
     pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
-    
     pdf.set_xy(155, y_linea2 - 1)
     pdf.cell(18, 4, 'Firma:', 0, 0, 'R')
 
@@ -550,11 +523,9 @@ def generar_pdf_ricc14(row, supervisor, ruta_guardado_temp):
     pdf.output(ruta_guardado_temp)
 
 
-# Inicializar
 if "items_ingreso_actual" not in st.session_state:
   st.session_state.items_ingreso_actual = []
 
-# Cargar catálogo
 df_db = None
 if os.path.exists(ARCHIVO_CATALOGO):
   try:
@@ -563,7 +534,7 @@ if os.path.exists(ARCHIVO_CATALOGO):
   except Exception as e:
     st.error(f"Error al leer el catálogo: {e}")
 
-st.sidebar.header("⚙️ Configuración")
+st.sidebar.header("⚙️ Configuración y Respaldo")
 archivo_catalogo_nuevo = st.sidebar.file_uploader("Actualizar Catálogo", type=["xlsx"])
 if archivo_catalogo_nuevo is not None:
   with open(ARCHIVO_CATALOGO, "wb") as f:
@@ -571,6 +542,13 @@ if archivo_catalogo_nuevo is not None:
   df_db = pd.read_excel(ARCHIVO_CATALOGO)
   df_db.columns = df_db.columns.str.strip()
   st.sidebar.success("¡Catálogo actualizado!")
+
+# Botón de seguridad en el menú lateral para recuperar respaldo
+if os.path.exists("registros_pendientes_respaldo.csv"):
+    if st.sidebar.button("🛡️ Restaurar desde Respaldo de Seguridad"):
+        shutil.copy("registros_pendientes_respaldo.csv", ARCHIVO_PENDIENTES)
+        st.sidebar.success("¡Registros restaurados con éxito desde el respaldo!")
+        st.rerun()
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📝 1. Ingreso de Operador", "✍️ 2. Panel de Calidad", "🔍 3. Trazabilidad", "📁 4. Explorador de Archivos", "📊 5. Control Excel"
@@ -612,7 +590,6 @@ with tab1:
     palabras_clave_empaque = ["envase", "etiqueta", "tapa", "botella", "caja", "bolsa", "film", "saco", "precinto", "carton"]
     es_empaque = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_empaque)
 
-    # Lógica de temperatura: Si dice Aceite o es empaque, no requiere temperatura
     es_aceite = "aceite" in str(material_sel).lower() or "aceite" in str(tipo_mat_sel).lower()
     
     if es_empaque or es_aceite:
@@ -621,7 +598,6 @@ with tab1:
         palabras_clave_temp = ["pulpa", "concentrado", "leche", "refrigerado", "congelado", "fresco", "crema", "mantequilla", "queso", "carne", "pollo", "embutido"]
         requiere_temperatura = any(kw in str(material_sel).lower() or kw in str(tipo_mat_sel).lower() for kw in palabras_clave_temp)
 
-    # Excepción para COA: Si el material seleccionado contiene coco, naranja valencia hn o mora
     mat_lower = str(material_sel).lower()
     exime_coa = "coco" in mat_lower or "naranja valencia hn" in mat_lower or "mora" in mat_lower
 
@@ -720,7 +696,6 @@ with tab1:
     if len(st.session_state.items_ingreso_actual) > 0:
       st.markdown("---")
       st.subheader("📋 Resumen de Productos Agregados y Edición")
-      
       for idx, item in enumerate(st.session_state.items_ingreso_actual):
           st.markdown(f"""
           <div style='background-color: #eef2f7; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #0066cc;'>
@@ -729,15 +704,13 @@ with tab1:
           </div>
           """, unsafe_allow_html=True)
 
-      with st.expander("✏️ Editar un producto agregado (si te confundiste en algo)"):
+      with st.expander("✏️ Editar un producto agregado"):
           idx_editar = st.selectbox(
               "Selecciona el producto a editar:",
               options=range(len(st.session_state.items_ingreso_actual)),
               format_func=lambda x: f"#{x+1} - {st.session_state.items_ingreso_actual[x]['NombreMaterial']} (Lote: {st.session_state.items_ingreso_actual[x]['Lote']})"
           )
-          
           item_actual = st.session_state.items_ingreso_actual[idx_editar]
-          
           with st.form(f"form_editar_item_{idx_editar}"):
               nuevo_lote = st.text_input("Lote del Proveedor", value=item_actual['Lote'])
               nueva_factura = st.text_input("No. de Factura/Guía", value=item_actual['FacturaGuia'])
@@ -817,7 +790,7 @@ with tab1:
         enviar_notificacion_outlook(asunto_mail, cuerpo_mail)
 
         st.session_state.items_ingreso_actual = []
-        st.success("🎉 ¡Enviados a calidad con éxito y notificación enviada!")
+        st.success("🎉 ¡Enviados a calidad con éxito y respaldo de seguridad actualizado!")
         st.rerun()
 
   else:
@@ -828,7 +801,6 @@ with tab1:
 # ------------------------------------------
 with tab2:
   st.header("✍️ Panel de Control y Firma")
-  
   df_p = cargar_pendientes()
   pendientes = df_p[df_p["Estado"] == "Pendiente"] if not df_p.empty else pd.DataFrame()
 
@@ -843,7 +815,6 @@ with tab2:
 
         nombre_supervisor = st.text_input("Nombre del Supervisor", value="Carlos López", key=f"sup_nom_{row['ID']}")
         st.write("✍️ **Dibuja tu Firma de Supervisor:**")
-        
         canvas_sup = None
         if st_canvas:
             canvas_sup = st_canvas(stroke_width=2, stroke_color="#000", background_color="#ffffff", height=100, width=400, drawing_mode="freedraw", key=f"firma_sup_{row['ID']}")
@@ -856,7 +827,6 @@ with tab2:
             else:
               with st.spinner("Generando y unificando el PDF de Auditoría..."):
                 carpeta_base = "./Registros_Oficiales"
-                
                 planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace("\\", "_")
                 tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace("\\", "_")
                 nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace("\\", "_")
@@ -864,7 +834,6 @@ with tab2:
                 fecha_safe = str(row.get("IngresoSAP", "")).replace("/", "-")
                 
                 nombre_base_archivo = f"{nombre_mat_safe}_{lote_safe}_{fecha_safe}"
-                
                 subcarpeta_lote = f"Lote_{lote_safe}_{nombre_mat_safe}"
                 ruta_destino = os.path.join(carpeta_base, planta_safe, tipo_mat_safe, nombre_mat_safe, subcarpeta_lote)
                 os.makedirs(ruta_destino, exist_ok=True)
@@ -904,7 +873,7 @@ with tab2:
                 df_p.loc[df_p["ID"] == row["ID"], "RutaFirmaSup"] = str(ruta_firma_sup)
                 guardar_pendientes(df_p)
 
-                st.success("🎉 ¡Aprobado! Documento maestro listo y carpetas creadas.")
+                st.success("🎉 ¡Aprobado! Documento maestro listo y respaldo actualizado.")
                 st.rerun()
 
         with col_btn2:
@@ -947,7 +916,6 @@ with tab3:
       planta_val = row.get('Planta', 'N/A')
       fecha_rec = str(row.get('IngresoSAP', 'N/A'))
       with st.expander(f"📁 Planta: {planta_val} | Material: {row['NombreMaterial']} | Lote: {row['LoteProveedor']} | Ingreso SAP: {fecha_rec}"):
-        
         nombre_mat_descarga = str(row.get('NombreMaterial', 'Material')).replace("/", "_")
         lote_descarga = str(row.get('LoteProveedor', 'Lote')).replace("/", "_")
         fecha_descarga = str(row.get('IngresoSAP', 'Fecha')).replace("/", "-")
@@ -974,7 +942,7 @@ with tab3:
             st.rerun()
 
 # ------------------------------------------
-# PESTAÑA 4: EXPLORADOR DE ARCHIVOS (ESTRUCTURA: PLANTA -> TIPO MATERIAL -> PROVEEDOR -> MATERIAL -> LOTES)
+# PESTAÑA 4: EXPLORADOR DE ARCHIVOS
 # ------------------------------------------
 with tab4:
   st.header("📁 Explorador de Archivos Corporativo")
@@ -987,7 +955,6 @@ with tab4:
     st.info("No hay registros aprobados para mostrar en el explorador.")
   else:
     busqueda_exp = st.text_input("🔍 Buscar dentro del Explorador (Material, Lote o Proveedor)", placeholder="Escriba para filtrar carpetas...")
-    
     df_filtrado_exp = aprobados_exp.copy()
     if busqueda_exp:
       df_filtrado_exp = df_filtrado_exp[
@@ -1000,39 +967,25 @@ with tab4:
     if len(df_filtrado_exp) == 0:
       st.warning("⚠️ No se encontraron coincidencias con el término de búsqueda en el explorador.")
     else:
-      # Nivel 1: Plantas
       plantas_disponibles = df_filtrado_exp["Planta"].dropna().unique()
-      
       for planta in plantas_disponibles:
         df_planta_exp = df_filtrado_exp[df_filtrado_exp["Planta"] == planta]
-        
         with st.expander(f"📁 Planta: {planta} ({len(df_planta_exp)} registros)"):
-          # Nivel 2: Tipo de Material
           tipos_material_exp = df_planta_exp["TipoMaterial"].dropna().unique()
-          
           for tipo_mat in tipos_material_exp:
             df_tipo_exp = df_planta_exp[df_planta_exp["TipoMaterial"] == tipo_mat]
-            
             with st.expander(f"📂 Tipo de Material: {tipo_mat} ({len(df_tipo_exp)} registros)"):
-              # Nivel 3: Proveedor
               proveedores_exp = df_tipo_exp["Proveedor"].dropna().unique()
-              
               for proveedor in proveedores_exp:
                 df_prov_exp = df_tipo_exp[df_tipo_exp["Proveedor"] == proveedor]
-                
                 with st.expander(f"🏢 Proveedor: {proveedor} ({len(df_prov_exp)} registros)"):
-                  # Nivel 4: Nombre del Material
                   materiales_exp = df_prov_exp["NombreMaterial"].dropna().unique()
-                  
                   for material in materiales_exp:
                     df_mat_exp = df_prov_exp[df_prov_exp["NombreMaterial"] == material]
-                    
                     with st.expander(f"📦 Material: {material} ({len(df_mat_exp)} lotes)"):
-                      # Nivel 5: Lotes / Registros individuales
                       for idx_exp, row_exp in df_mat_exp.iterrows():
                         lote_exp = row_exp.get("LoteProveedor", "S/Lote")
                         fecha_exp = str(row_exp.get("IngresoSAP", "S/Fecha"))
-                        
                         st.markdown(f"""
                         <div style='background-color: #f1f3f5; padding: 8px 12px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #0066cc;'>
                             <b>Lote:</b> {lote_exp} | <b>Ingreso SAP:</b> {fecha_exp}
@@ -1060,7 +1013,7 @@ with tab4:
                         st.markdown("---")
 
 # ------------------------------------------
-# PESTAÑA 5: CONTROL EXCEL (GERENCIAL)
+# PESTAÑA 5: CONTROL EXCEL
 # ------------------------------------------
 with tab5:
   st.header("📊 Control de Ingresos a Detalle")
