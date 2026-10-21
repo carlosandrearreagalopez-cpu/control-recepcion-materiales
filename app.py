@@ -8,6 +8,8 @@ import streamlit as st
 from fpdf import FPDF
 import io
 import smtplib
+import sqlite3
+import zipfile
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -35,10 +37,54 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-ARCHIVO_PENDIENTES = "registros_pendientes.csv"
+DB_NAME = "registros_lif.db"
 ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
 CONTRASENA_SISTEMA = "Lif1012"
 CORREO_NOTIFICACION = "carreaga@lifbrands.co"
+
+# Inicializar Base de Datos SQLite (Persistencia Definitiva)
+def inicializar_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS registros (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Planta TEXT,
+            TipoMaterial TEXT,
+            NombreMaterial TEXT,
+            Proveedor TEXT,
+            LoteProveedor TEXT,
+            FacturaGuia TEXT,
+            Transporte TEXT,
+            Placa TEXT,
+            IngresoSAP TEXT,
+            DocSAP TEXT,
+            EstadoMarchamo TEXT,
+            Marchamo TEXT,
+            EstadoCandado TEXT,
+            EstadoTarima TEXT,
+            Cantidad REAL,
+            Unidad TEXT,
+            TempTransporte TEXT,
+            TempMaterial TEXT,
+            FechaProduccion TEXT,
+            FechaVencimiento TEXT,
+            Criticidad TEXT,
+            Responsable TEXT,
+            Fecha TEXT,
+            Estado TEXT,
+            FirmaCalidad TEXT,
+            RutaCarpeta TEXT,
+            RutaChecklistOficial TEXT,
+            RutaPdfCert TEXT,
+            RutaFirmaOp TEXT,
+            RutaFirmaSup TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+inicializar_db()
 
 # ------------------------------------------
 # INTERFAZ DE AUTENTICACIÓN INICIAL (LIF)
@@ -75,7 +121,7 @@ st.title("📦 Sistema de Trazabilidad y Control de Calidad - LIF")
 st.markdown("---")
 
 # ------------------------------------------
-# FUNCIONES DE DATOS Y RESPALDO
+# FUNCIONES DE DATOS CON SQLITE
 # ------------------------------------------
 def enviar_notificacion_outlook(asunto, cuerpo_mensaje):
     remitente = CORREO_NOTIFICACION
@@ -99,8 +145,10 @@ def enviar_notificacion_outlook(asunto, cuerpo_mensaje):
         return False
 
 def cargar_pendientes():
-  if os.path.exists(ARCHIVO_PENDIENTES):
-    df = pd.read_csv(ARCHIVO_PENDIENTES)
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM registros ORDER BY IngresoSAP DESC", conn)
+    conn.close()
+    
     columnas_texto = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor",
         "LoteProveedor", "FacturaGuia", "Transporte", "Placa",
@@ -110,29 +158,54 @@ def cargar_pendientes():
         "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert", "RutaFirmaOp", "RutaFirmaSup", "EstadoTarima"
     ]
     for col in columnas_texto:
-      if col not in df.columns:
-        df[col] = ""
-      else:
-        df[col] = df[col].astype(str)
-    
-    if "IngresoSAP" in df.columns and not df.empty:
-      df = df.sort_values(by="IngresoSAP", ascending=False).reset_index(drop=True)
-      
+        if col not in df.columns:
+            df[col] = ""
+        else:
+            df[col] = df[col].astype(str)
+            
     return df
-  else:
-    return pd.DataFrame(columns=[
-        "ID", "Planta", "TipoMaterial", "NombreMaterial", "Proveedor",
-        "LoteProveedor", "FacturaGuia", "Transporte", "Placa",
-        "IngresoSAP", "DocSAP", "EstadoMarchamo", "Marchamo", "EstadoCandado", "Cantidad",
-        "Unidad", "TempTransporte", "TempMaterial", "FechaProduccion", "FechaVencimiento",
-        "Criticidad", "Responsable", "Fecha", "Estado", "FirmaCalidad",
-        "RutaCarpeta", "RutaChecklistOficial", "RutaPdfCert", "RutaFirmaOp", "RutaFirmaSup", "EstadoTarima"
-    ])
 
-def guardar_pendientes(df):
-  df.to_csv(ARCHIVO_PENDIENTES, index=False)
-  # Respaldo automático instantáneo para que NADA se pierda ante reinicios
-  df.to_csv("registros_pendientes_respaldo.csv", index=False)
+def guardar_registro_db(nuevo_registro):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO registros (
+            Planta, TipoMaterial, NombreMaterial, Proveedor, LoteProveedor,
+            FacturaGuia, Transporte, Placa, IngresoSAP, DocSAP, EstadoMarchamo,
+            Marchamo, EstadoCandado, EstadoTarima, Cantidad, Unidad, TempTransporte,
+            TempMaterial, FechaProduccion, FechaVencimiento, Criticidad, Responsable,
+            Fecha, Estado, FirmaCalidad, RutaCarpeta, RutaChecklistOficial,
+            RutaPdfCert, RutaFirmaOp, RutaFirmaSup
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        nuevo_registro.get("Planta"), nuevo_registro.get("TipoMaterial"), nuevo_registro.get("NombreMaterial"),
+        nuevo_registro.get("Proveedor"), nuevo_registro.get("LoteProveedor"), nuevo_registro.get("FacturaGuia"),
+        nuevo_registro.get("Transporte"), nuevo_registro.get("Placa"), nuevo_registro.get("IngresoSAP"),
+        nuevo_registro.get("DocSAP"), nuevo_registro.get("EstadoMarchamo"), nuevo_registro.get("Marchamo"),
+        nuevo_registro.get("EstadoCandado"), nuevo_registro.get("EstadoTarima"), nuevo_registro.get("Cantidad"),
+        nuevo_registro.get("Unidad"), nuevo_registro.get("TempTransporte"), nuevo_registro.get("TempMaterial"),
+        nuevo_registro.get("FechaProduccion"), nuevo_registro.get("FechaVencimiento"), nuevo_registro.get("Criticidad"),
+        nuevo_registro.get("Responsable"), nuevo_registro.get("Fecha"), nuevo_registro.get("Estado"),
+        nuevo_registro.get("FirmaCalidad"), nuevo_registro.get("RutaCarpeta"), nuevo_registro.get("RutaChecklistOficial"),
+        nuevo_registro.get("RutaPdfCert"), nuevo_registro.get("RutaFirmaOp"), nuevo_registro.get("RutaFirmaSup")
+    ))
+    conn.commit()
+    conn.close()
+
+def actualizar_registro_db(id_reg, campos_actualizados):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    for campo, valor in campos_actualizados.items():
+        cursor.execute(f"UPDATE registros SET {campo} = ? WHERE ID = ?", (valor, id_reg))
+    conn.commit()
+    conn.close()
+
+def eliminar_registro_db(id_reg):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM registros WHERE ID = ?", (id_reg,))
+    conn.commit()
+    conn.close()
 
 def guardar_firma(canvas_result, prefix):
     if canvas_result is not None:
@@ -534,7 +607,7 @@ if os.path.exists(ARCHIVO_CATALOGO):
   except Exception as e:
     st.error(f"Error al leer el catálogo: {e}")
 
-st.sidebar.header("⚙️ Configuración y Respaldo")
+st.sidebar.header("⚙️ Configuración y Base de Datos")
 archivo_catalogo_nuevo = st.sidebar.file_uploader("Actualizar Catálogo", type=["xlsx"])
 if archivo_catalogo_nuevo is not None:
   with open(ARCHIVO_CATALOGO, "wb") as f:
@@ -542,13 +615,6 @@ if archivo_catalogo_nuevo is not None:
   df_db = pd.read_excel(ARCHIVO_CATALOGO)
   df_db.columns = df_db.columns.str.strip()
   st.sidebar.success("¡Catálogo actualizado!")
-
-# Botón de seguridad en el menú lateral para recuperar respaldo
-if os.path.exists("registros_pendientes_respaldo.csv"):
-    if st.sidebar.button("🛡️ Restaurar desde Respaldo de Seguridad"):
-        shutil.copy("registros_pendientes_respaldo.csv", ARCHIVO_PENDIENTES)
-        st.sidebar.success("¡Registros restaurados con éxito desde el respaldo!")
-        st.rerun()
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📝 1. Ingreso de Operador", "✍️ 2. Panel de Calidad", "🔍 3. Trazabilidad", "📁 4. Explorador de Archivos", "📊 5. Control Excel"
@@ -761,12 +827,9 @@ with tab1:
       if st.button("🚀 Enviar a Calidad", type="primary"):
         ruta_firma_op = guardar_firma(canvas_op, "firma_op")
 
-        df_p = cargar_pendientes()
-        nuevo_id = int(df_p["ID"].max()) + 1 if not df_p.empty and not pd.isna(df_p["ID"].max()) else 1
-
         for item in st.session_state.items_ingreso_actual:
           nuevo_registro = {
-              "ID": nuevo_id, "Planta": str(item["Planta"]), "TipoMaterial": str(item["TipoMaterial"]),
+              "Planta": str(item["Planta"]), "TipoMaterial": str(item["TipoMaterial"]),
               "NombreMaterial": str(item["NombreMaterial"]), "Proveedor": str(item["Proveedor"]),
               "FacturaGuia": str(item["FacturaGuia"]), "Transporte": str(item["Transporte"]),
               "Placa": str(item["Placa"]), "IngresoSAP": str(item["IngresoSAP"]), "DocSAP": str(item["DocSAP"]),
@@ -780,17 +843,14 @@ with tab1:
               "RutaCarpeta": "", "RutaChecklistOficial": "", "RutaPdfCert": str(item["RutaTemp"]),
               "RutaFirmaOp": ruta_firma_op, "RutaFirmaSup": ""
           }
-          df_p = pd.concat([df_p, pd.DataFrame([nuevo_registro])], ignore_index=True)
-          nuevo_id += 1
-
-        guardar_pendientes(df_p)
+          guardar_registro_db(nuevo_registro)
         
         asunto_mail = "🚨 Nuevo Material Pendiente de Revisión - Sistema LIF"
         cuerpo_mail = f"Se ha enviado un nuevo lote de material para revisión en el sistema LIF.\n\nOperador responsable: {responsable}\nFecha de Ingreso: {item['IngresoSAP']}\n\nPor favor ingrese al sistema para su verificación y aprobación."
         enviar_notificacion_outlook(asunto_mail, cuerpo_mail)
 
         st.session_state.items_ingreso_actual = []
-        st.success("🎉 ¡Enviados a calidad con éxito y respaldo de seguridad actualizado!")
+        st.success("🎉 ¡Enviados a calidad con éxito y guardados permanentemente en la Base de Datos SQLite!")
         st.rerun()
 
   else:
@@ -827,10 +887,10 @@ with tab2:
             else:
               with st.spinner("Generando y unificando el PDF de Auditoría..."):
                 carpeta_base = "./Registros_Oficiales"
-                planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace("\\", "_")
-                tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace("\\", "_")
-                nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace("\\", "_")
-                lote_safe = str(row.get("LoteProveedor", "Lote")).replace("/", "_").replace("\\", "_")
+                planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace("\", "_")
+                tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace("\", "_")
+                nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace("\", "_")
+                lote_safe = str(row.get("LoteProveedor", "Lote")).replace("/", "_").replace("\", "_")
                 fecha_safe = str(row.get("IngresoSAP", "")).replace("/", "-")
                 
                 nombre_base_archivo = f"{nombre_mat_safe}_{lote_safe}_{fecha_safe}"
@@ -839,7 +899,6 @@ with tab2:
                 os.makedirs(ruta_destino, exist_ok=True)
 
                 ruta_firma_sup = guardar_firma(canvas_sup, f"firma_sup_{row['ID']}")
-                row['RutaFirmaSup'] = ruta_firma_sup
 
                 ruta_cert_origen = str(row.get("RutaPdfCert", ""))
                 ext_cert = os.path.splitext(ruta_cert_origen)[1] if ruta_cert_origen and ruta_cert_origen != "nan" else ".pdf"
@@ -865,21 +924,21 @@ with tab2:
                 if os.path.exists(ruta_checklist_temp):
                     os.remove(ruta_checklist_temp)
 
-                df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
-                df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(nombre_supervisor)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = str(ruta_destino)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaChecklistOficial"] = str(ruta_unificada)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(ruta_cert_final)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaFirmaSup"] = str(ruta_firma_sup)
-                guardar_pendientes(df_p)
+                actualizar_registro_db(row["ID"], {
+                    "Estado": "Aprobado",
+                    "FirmaCalidad": str(nombre_supervisor),
+                    "RutaCarpeta": str(ruta_destino),
+                    "RutaChecklistOficial": str(ruta_unificada),
+                    "RutaPdfCert": str(ruta_cert_final),
+                    "RutaFirmaSup": str(ruta_firma_sup)
+                })
 
-                st.success("🎉 ¡Aprobado! Documento maestro listo y respaldo actualizado.")
+                st.success("🎉 ¡Aprobado! Documento maestro listo y guardado en la base de datos.")
                 st.rerun()
 
         with col_btn2:
           if st.button("🗑️ Eliminar Registro", key=f"del_pend_{row['ID']}"):
-            df_p = df_p[df_p["ID"] != row["ID"]]
-            guardar_pendientes(df_p)
+            eliminar_registro_db(row["ID"])
             st.rerun()
 
 # ------------------------------------------
@@ -937,8 +996,7 @@ with tab3:
         
         with col_d3:
           if st.button("🗑️ Borrar", key=f"del_apr_{row['ID']}"):
-            df_p = df_p[df_p["ID"] != row["ID"]]
-            guardar_pendientes(df_p)
+            eliminar_registro_db(row["ID"])
             st.rerun()
 
 # ------------------------------------------
@@ -1013,15 +1071,15 @@ with tab4:
                         st.markdown("---")
 
 # ------------------------------------------
-# PESTAÑA 5: CONTROL EXCEL
+# PESTAÑA 5: CONTROL EXCEL Y DESCARGA MASIVA (ZIP)
 # ------------------------------------------
 with tab5:
-  st.header("📊 Control de Ingresos a Detalle")
+  st.header("📊 Control de Ingresos y Descarga Masiva")
   df_p = cargar_pendientes()
   aprobados_excel = df_p[df_p["Estado"] == "Aprobado"].copy() if not df_p.empty else pd.DataFrame()
 
   if len(aprobados_excel) == 0:
-    st.info("No hay información suficiente.")
+    st.info("No hay información suficiente para generar reportes.")
   else:
     columnas_reporte = [
         "Planta", "TipoMaterial", "NombreMaterial", "Proveedor", "LoteProveedor", 
@@ -1031,7 +1089,31 @@ with tab5:
     df_reporte = aprobados_excel[columnas_reporte].copy()
     st.dataframe(df_reporte, use_container_width=True)
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_reporte.to_excel(writer, index=False, sheet_name='Historial')
-    st.download_button("📥 Descargar Base Completa (Excel)", data=output.getvalue(), file_name=f"Control_LIF_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+    col_dl1, col_dl2 = st.columns(2)
+    with col_dl1:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_reporte.to_excel(writer, index=False, sheet_name='Historial')
+        st.download_button("📥 Descargar Base Completa (Excel)", data=output.getvalue(), file_name=f"Control_LIF_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+
+    with col_dl2:
+        # Opción para comprimir y descargar TODOS los PDFs y Certificados en un archivo ZIP
+        if st.button("📦 Descargar Todos los Certificados y PDFs (ZIP)", type="secondary"):
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                # Recorrer la carpeta de registros oficiales y agregar todos los archivos
+                if os.path.exists("./Registros_Oficiales"):
+                    for root, dirs, files in os.walk("./Registros_Oficiales"):
+                        for file in files:
+                            ruta_completa = os.path.join(root, file)
+                            # Ruta relativa para la estructura dentro del ZIP
+                            ruta_relativa = os.path.relpath(ruta_completa, "./Registros_Oficiales")
+                            zip_file.write(ruta_completa, ruta_relativa)
+            
+            zip_buffer.seek(0)
+            st.download_button(
+                label="⬇️ Click aquí para descargar el ZIP",
+                data=zip_buffer,
+                file_name=f"Certificados_Y_Documentos_LIF_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
+                mime="application/zip"
+            )
