@@ -10,6 +10,7 @@ import io
 import smtplib
 import sqlite3
 import zipfile
+import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -107,13 +108,16 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         SCOPES = ['https://www.googleapis.com/auth/drive']
         
         # Cargar credenciales desde st.secrets (Nube) o credentials.json (Local)
-        if hasattr(st, "secrets") and "google_credentials" in st.secrets:
+        if hasattr(st, "secrets") and "google_json" in st.secrets:
+            creds_dict = json.loads(st.secrets["google_json"])
+            creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        elif hasattr(st, "secrets") and "google_credentials" in st.secrets:
             creds_dict = dict(st.secrets["google_credentials"])
             creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         elif os.path.exists(CREDENTIALS_FILE):
             creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
         else:
-            st.error("❌ FALTA DE CREDENCIALES: No se encontró 'credentials.json' en la carpeta ni la sección [google_credentials] en st.secrets de Streamlit Cloud.")
+            st.error("❌ FALTA DE CREDENCIALES: No se encontró 'credentials.json' ni la variable 'google_json' en st.secrets de Streamlit Cloud.")
             return None
 
         service = build('drive', 'v3', credentials=creds)
