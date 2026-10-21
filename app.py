@@ -100,11 +100,20 @@ inicializar_db()
 # FUNCIONES DE GOOGLE DRIVE AUTOMATIZADAS
 # ------------------------------------------
 def subir_a_google_drive(ruta_archivo_local, nombre_destino):
-    if not GOOGLE_DRIVE_DISPONIBLE or not os.path.exists(CREDENTIALS_FILE):
+    if not GOOGLE_DRIVE_DISPONIBLE:
         return None
     try:
         SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
+        
+        # Cargar credenciales desde st.secrets (Nube) o credentials.json (Local)
+        if hasattr(st, "secrets") and "google_credentials" in st.secrets:
+            creds_dict = dict(st.secrets["google_credentials"])
+            creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        elif os.path.exists(CREDENTIALS_FILE):
+            creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
+        else:
+            return None
+
         service = build('drive', 'v3', credentials=creds)
 
         file_metadata = {'name': nombre_destino}
@@ -175,7 +184,7 @@ def enviar_notificacion_outlook(asunto, cuerpo_mensaje):
 
 def cargar_pendientes():
     conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query("SELECT * FROM registros ORDER BY ID DESC", conn)
+    df = pd.read_sql_query("SELECT * FROM registros ORDER BY IngresoSAP DESC", conn)
     conn.close()
     
     columnas_texto = [
