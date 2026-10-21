@@ -10,18 +10,8 @@ import io
 import smtplib
 import sqlite3
 import zipfile
-import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
-# Importar Google API para Google Drive
-try:
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaFileUpload
-    from google.oauth2 import service_account
-    GOOGLE_DRIVE_DISPONIBLE = True
-except ImportError:
-    GOOGLE_DRIVE_DISPONIBLE = False
 
 # Librerías adicionales
 try:
@@ -51,7 +41,6 @@ DB_NAME = "registros_lif.db"
 ARCHIVO_CATALOGO = "Maestro_Materiales_Proveedores (2).xlsx"
 CONTRASENA_SISTEMA = "Lif1012"
 CORREO_NOTIFICACION = "carreaga@lifbrands.co"
-CREDENTIALS_FILE = "credentials.json"
 
 # Inicializar Base de Datos SQLite (Persistencia Definitiva)
 def inicializar_db():
@@ -96,47 +85,6 @@ def inicializar_db():
     conn.close()
 
 inicializar_db()
-
-# ------------------------------------------
-# FUNCIONES DE GOOGLE DRIVE AUTOMATIZADAS
-# ------------------------------------------
-def subir_a_google_drive(ruta_archivo_local, nombre_destino):
-    if not GOOGLE_DRIVE_DISPONIBLE:
-        st.error("⚠️ Las librerías de Google Drive no están instaladas.")
-        return None
-    try:
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        
-        # Cargar credenciales directo desde st.secrets
-        creds_dict = None
-        if hasattr(st, "secrets"):
-            if "google_json" in st.secrets:
-                raw_json = st.secrets["google_json"]
-                creds_dict = json.loads(raw_json)
-            elif "google_credentials" in st.secrets:
-                creds_dict = dict(st.secrets["google_credentials"])
-                if "private_key" in creds_dict:
-                    creds_dict["private_key"] = creds_dict["private_key"].replace("\n", "
-")
-                    
-        if not creds_dict and os.path.exists(CREDENTIALS_FILE):
-            with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f_cred:
-                creds_dict = json.load(f_cred)
-                
-        if not creds_dict:
-            st.error("❌ No se encontraron credenciales válidas en st.secrets ni en credentials.json.")
-            return None
-
-        creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-        service = build('drive', 'v3', credentials=creds)
-        
-        file_metadata = {'name': nombre_destino}
-        media = MediaFileUpload(ruta_archivo_local, resumable=True)
-        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        return file.get('webViewLink')
-    except Exception as e:
-        st.error(f"❌ ERROR DETALLADO DE GOOGLE DRIVE: {str(e)}")
-        return None
 
 # ------------------------------------------
 # INTERFAZ DE AUTENTICACIÓN INICIAL (LIF)
@@ -939,7 +887,7 @@ with tab2:
             if not nombre_supervisor:
               st.error("Ingrese su nombre para firmar.")
             else:
-              with st.spinner("Generando, unificando y subiendo a Google Drive..."):
+              with st.spinner("Generando y unificando documento maestro..."):
                 carpeta_base = "./Registros_Oficiales"
                 
                 planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace(chr(92), "_")
@@ -980,13 +928,6 @@ with tab2:
                 if os.path.exists(ruta_checklist_temp):
                     os.remove(ruta_checklist_temp)
 
-                # Sincronización automática a Google Drive
-                link_drive = subir_a_google_drive(ruta_unificada, f"{nombre_base_archivo}.pdf")
-                if link_drive:
-                    st.success(f"☁️ ¡Sincronizado y subido con éxito a Google Drive! [Ver en Drive]({link_drive})")
-                else:
-                    st.warning("⚠️ El documento maestro se guardó localmente, pero no se pudo subir a Google Drive (verifique sus credenciales o st.secrets).")
-
                 actualizar_registro_db(row["ID"], {
                     "Estado": "Aprobado",
                     "FirmaCalidad": str(nombre_supervisor),
@@ -996,7 +937,7 @@ with tab2:
                     "RutaFirmaSup": str(ruta_firma_sup)
                 })
 
-                st.success("🎉 ¡Aprobado! Documento maestro listo y subido a Google Drive.")
+                st.success("🎉 ¡Aprobado! Documento maestro guardado exitosamente en carpetas locales.")
                 st.rerun()
 
         with col_btn2:
@@ -1148,7 +1089,7 @@ with tab4:
 # PESTAÑA 5: CONTROL EXCEL Y DESCARGA MASIVA
 # ------------------------------------------
 with tab5:
-  st.header("📊 Control de Ingresos y Descarga Masiva")
+  st.header("📊 Control de Ingresos y Descaarga Masiva")
   df_p = cargar_pendientes()
   aprobados_excel = df_p[df_p["Estado"] == "Aprobado"].copy() if not df_p.empty else pd.DataFrame()
 
