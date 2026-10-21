@@ -106,26 +106,29 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         return None
     try:
         SCOPES = ['https://www.googleapis.com/auth/drive']
+        import json
+        from google.oauth2 import service_account
         
-        # Método infalible y limpio: Escribir el archivo credentials.json físico desde st.secrets
+        creds_dict = None
         if hasattr(st, "secrets"):
             if "google_json" in st.secrets:
                 raw_json = st.secrets["google_json"]
-                with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f_cred:
-                    f_cred.write(raw_json)
+                creds_dict = json.loads(raw_json)
             elif "google_credentials" in st.secrets:
                 creds_dict = dict(st.secrets["google_credentials"])
                 if "private_key" in creds_dict:
-                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-                with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f_cred:
-                    json.dump(creds_dict, f_cred)
-
-        if not os.path.exists(CREDENTIALS_FILE):
-            st.error("❌ No se encontró el archivo 'credentials.json' ni la configuración en st.secrets.")
+                    creds_dict["private_key"] = creds_dict["private_key"].replace("\n", "
+")
+                    
+        if not creds_dict and os.path.exists(CREDENTIALS_FILE):
+            with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f_cred:
+                creds_dict = json.load(f_cred)
+                
+        if not creds_dict:
+            st.error("❌ No se encontraron credenciales válidas en st.secrets ni en credentials.json.")
             return None
 
-        # Cargar credenciales mediante service_account.Credentials.from_service_file
-        creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
+        creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         service = build('drive', 'v3', credentials=creds)
         
         file_metadata = {'name': nombre_destino}
