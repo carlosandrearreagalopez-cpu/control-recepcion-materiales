@@ -101,6 +101,7 @@ inicializar_db()
 # ------------------------------------------
 def subir_a_google_drive(ruta_archivo_local, nombre_destino):
     if not GOOGLE_DRIVE_DISPONIBLE:
+        st.error("⚠️ Las librerías de Google Drive no están instaladas.")
         return None
     try:
         SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -112,6 +113,7 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         elif os.path.exists(CREDENTIALS_FILE):
             creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
         else:
+            st.warning("⚠️ No se encontró el archivo 'credentials.json' ni los secretos de Google en Streamlit.")
             return None
 
         service = build('drive', 'v3', credentials=creds)
@@ -121,7 +123,7 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         return file.get('webViewLink')
     except Exception as e:
-        print(f"Error al subir a Google Drive: {e}")
+        st.error(f"❌ Error al conectar con Google Drive: {e}")
         return None
 
 # ------------------------------------------
@@ -969,7 +971,9 @@ with tab2:
                 # Sincronización automática a Google Drive
                 link_drive = subir_a_google_drive(ruta_unificada, f"{nombre_base_archivo}.pdf")
                 if link_drive:
-                    st.success("☁️ ¡Sincronizado automáticamente con Google Drive!")
+                    st.success(f"☁️ ¡Sincronizado y subido con éxito a Google Drive! [Ver en Drive]({link_drive})")
+                else:
+                    st.warning("⚠️ El documento maestro se guardó localmente, pero no se pudo subir a Google Drive (verifique sus credenciales o st.secrets).")
 
                 actualizar_registro_db(row["ID"], {
                     "Estado": "Aprobado",
