@@ -236,6 +236,10 @@ def eliminar_registro_db(id_reg):
     conn.commit()
     conn.close()
 
+def guardar_pendientes(df):
+    # Función de compatibilidad para evitar NameError
+    pass
+
 def guardar_firma(canvas_result, prefix):
     if canvas_result is not None:
         try:
