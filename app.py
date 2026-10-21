@@ -108,26 +108,27 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         SCOPES = ['https://www.googleapis.com/auth/drive']
         import json
         
-        creds = None
+        # Método infalible: Reconstruir credentials.json físicamente desde st.secrets si existe
         if hasattr(st, "secrets"):
             if "google_json" in st.secrets:
                 raw_json = st.secrets["google_json"]
-                creds_dict = json.loads(raw_json)
-                creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+                with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f_cred:
+                    f_cred.write(raw_json)
             elif "google_credentials" in st.secrets:
                 creds_dict = dict(st.secrets["google_credentials"])
                 if "private_key" in creds_dict:
                     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-                creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-                
-        if not creds and os.path.exists(CREDENTIALS_FILE):
-            creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
-            
-        if not creds:
-            st.error("❌ No se encontraron credenciales válidas en st.secrets ni en credentials.json.")
+                with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f_cred:
+                    json.dump(creds_dict, f_cred)
+
+        if not os.path.exists(CREDENTIALS_FILE):
+            st.error("❌ No se encontró el archivo 'credentials.json' ni la configuración en st.secrets.")
             return None
 
+        # Usar la función oficial de Google que lee el archivo JSON físico directamente (evita problemas de PEM mal formateado)
+        creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
         service = build('drive', 'v3', credentials=creds)
+        
         file_metadata = {'name': nombre_destino}
         media = MediaFileUpload(ruta_archivo_local, resumable=True)
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
