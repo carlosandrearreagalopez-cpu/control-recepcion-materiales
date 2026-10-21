@@ -10,7 +10,6 @@ import io
 import smtplib
 import sqlite3
 import zipfile
-import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -107,8 +106,9 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
     try:
         SCOPES = ['https://www.googleapis.com/auth/drive']
         import json
+        from google.oauth2 import service_account
         
-        # Método infalible: Reconstruir credentials.json físicamente desde st.secrets si existe
+        # Escribir el archivo credentials.json físico desde st.secrets
         if hasattr(st, "secrets"):
             if "google_json" in st.secrets:
                 raw_json = st.secrets["google_json"]
@@ -117,7 +117,8 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
             elif "google_credentials" in st.secrets:
                 creds_dict = dict(st.secrets["google_credentials"])
                 if "private_key" in creds_dict:
-                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                    creds_dict["private_key"] = creds_dict["private_key"].replace("\n", "
+")
                 with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f_cred:
                     json.dump(creds_dict, f_cred)
 
@@ -125,7 +126,7 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
             st.error("❌ No se encontró el archivo 'credentials.json' ni la configuración en st.secrets.")
             return None
 
-        # Usar la función oficial de Google que lee el archivo JSON físico directamente (evita problemas de PEM mal formateado)
+        # Cargar credenciales desde el archivo físico usando service_account.Credentials
         creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
         service = build('drive', 'v3', credentials=creds)
         
