@@ -175,7 +175,7 @@ def enviar_notificacion_outlook(asunto, cuerpo_mensaje):
 
 def cargar_pendientes():
     conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query("SELECT * FROM registros ORDER BY IngresoSAP DESC", conn)
+    df = pd.read_sql_query("SELECT * FROM registros ORDER BY ID DESC", conn)
     conn.close()
     
     columnas_texto = [
@@ -235,10 +235,6 @@ def eliminar_registro_db(id_reg):
     cursor.execute("DELETE FROM registros WHERE ID = ?", (id_reg,))
     conn.commit()
     conn.close()
-
-def guardar_pendientes(df):
-    # Función de compatibilidad para evitar NameError
-    pass
 
 def guardar_firma(canvas_result, prefix):
     if canvas_result is not None:
@@ -860,12 +856,9 @@ with tab1:
       if st.button("🚀 Enviar a Calidad", type="primary"):
         ruta_firma_op = guardar_firma(canvas_op, "firma_op")
 
-        df_p = cargar_pendientes()
-        nuevo_id = int(df_p["ID"].max()) + 1 if not df_p.empty and not pd.isna(df_p["ID"].max()) else 1
-
         for item in st.session_state.items_ingreso_actual:
           nuevo_registro = {
-              "ID": nuevo_id, "Planta": str(item["Planta"]), "TipoMaterial": str(item["TipoMaterial"]),
+              "Planta": str(item["Planta"]), "TipoMaterial": str(item["TipoMaterial"]),
               "NombreMaterial": str(item["NombreMaterial"]), "Proveedor": str(item["Proveedor"]),
               "FacturaGuia": str(item["FacturaGuia"]), "Transporte": str(item["Transporte"]),
               "Placa": str(item["Placa"]), "IngresoSAP": str(item["IngresoSAP"]), "DocSAP": str(item["DocSAP"]),
@@ -879,17 +872,14 @@ with tab1:
               "RutaCarpeta": "", "RutaChecklistOficial": "", "RutaPdfCert": str(item["RutaTemp"]),
               "RutaFirmaOp": ruta_firma_op, "RutaFirmaSup": ""
           }
-          df_p = pd.concat([df_p, pd.DataFrame([nuevo_registro])], ignore_index=True)
-          nuevo_id += 1
-
-        guardar_pendientes(df_p)
+          guardar_registro_db(nuevo_registro)
         
         asunto_mail = "🚨 Nuevo Material Pendiente de Revisión - Sistema LIF"
         cuerpo_mail = f"Se ha enviado un nuevo lote de material para revisión en el sistema LIF.\n\nOperador responsable: {responsable}\nFecha de Ingreso: {item['IngresoSAP']}\n\nPor favor ingrese al sistema para su verificación y aprobación."
         enviar_notificacion_outlook(asunto_mail, cuerpo_mail)
 
         st.session_state.items_ingreso_actual = []
-        st.success("🎉 ¡Enviados a calidad con éxito y notificación enviada!")
+        st.success("🎉 ¡Enviados a calidad con éxito y guardados en la Base de Datos SQLite!")
         st.rerun()
 
   else:
@@ -942,7 +932,6 @@ with tab2:
                 os.makedirs(ruta_destino, exist_ok=True)
 
                 ruta_firma_sup = guardar_firma(canvas_sup, f"firma_sup_{row['ID']}")
-                row['RutaFirmaSup'] = ruta_firma_sup
 
                 ruta_cert_origen = str(row.get("RutaPdfCert", ""))
                 ext_cert = os.path.splitext(ruta_cert_origen)[1] if ruta_cert_origen and ruta_cert_origen != "nan" else ".pdf"
@@ -973,21 +962,21 @@ with tab2:
                 if link_drive:
                     st.success("☁️ ¡Sincronizado automáticamente con Google Drive!")
 
-                df_p.loc[df_p["ID"] == row["ID"], "Estado"] = "Aprobado"
-                df_p.loc[df_p["ID"] == row["ID"], "FirmaCalidad"] = str(nombre_supervisor)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaCarpeta"] = str(ruta_destino)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaChecklistOficial"] = str(ruta_unificada)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaPdfCert"] = str(ruta_cert_final)
-                df_p.loc[df_p["ID"] == row["ID"], "RutaFirmaSup"] = str(ruta_firma_sup)
-                guardar_pendientes(df_p)
+                actualizar_registro_db(row["ID"], {
+                    "Estado": "Aprobado",
+                    "FirmaCalidad": str(nombre_supervisor),
+                    "RutaCarpeta": str(ruta_destino),
+                    "RutaChecklistOficial": str(ruta_unificada),
+                    "RutaPdfCert": str(ruta_cert_final),
+                    "RutaFirmaSup": str(ruta_firma_sup)
+                })
 
-                st.success("🎉 ¡Aprobado! Documento maestro listo y carpetas creadas.")
+                st.success("🎉 ¡Aprobado! Documento maestro listo y subido a Google Drive.")
                 st.rerun()
 
         with col_btn2:
           if st.button("🗑️ Eliminar Registro", key=f"del_pend_{row['ID']}"):
-            df_p = df_p[df_p["ID"] != row["ID"]]
-            guardar_pendientes(df_p)
+            eliminar_registro_db(row["ID"])
             st.rerun()
 
 # ------------------------------------------
@@ -1046,8 +1035,7 @@ with tab3:
         
         with col_d3:
           if st.button("🗑️ Borrar", key=f"del_apr_{row['ID']}"):
-            df_p = df_p[df_p["ID"] != row["ID"]]
-            guardar_pendientes(df_p)
+            eliminar_registro_db(row["ID"])
             st.rerun()
 
 # ------------------------------------------
