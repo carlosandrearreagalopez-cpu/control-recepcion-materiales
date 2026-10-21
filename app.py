@@ -101,7 +101,7 @@ inicializar_db()
 # ------------------------------------------
 def subir_a_google_drive(ruta_archivo_local, nombre_destino):
     if not GOOGLE_DRIVE_DISPONIBLE:
-        st.error("⚠️ Las librerías de Google Drive no están instaladas.")
+        st.error("⚠️ Las librerías de Google Drive no están instaladas en requirements.txt (google-api-python-client, google-auth).")
         return None
     try:
         SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -113,7 +113,7 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         elif os.path.exists(CREDENTIALS_FILE):
             creds = service_account.Credentials.from_service_file(CREDENTIALS_FILE, scopes=SCOPES)
         else:
-            st.warning("⚠️ No se encontró el archivo 'credentials.json' ni los secretos de Google en Streamlit.")
+            st.error("❌ FALTA DE CREDENCIALES: No se encontró 'credentials.json' en la carpeta ni la sección [google_credentials] en st.secrets de Streamlit Cloud.")
             return None
 
         service = build('drive', 'v3', credentials=creds)
@@ -123,7 +123,7 @@ def subir_a_google_drive(ruta_archivo_local, nombre_destino):
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         return file.get('webViewLink')
     except Exception as e:
-        st.error(f"❌ Error al conectar con Google Drive: {e}")
+        st.error(f"❌ ERROR DETALLADO DE GOOGLE DRIVE: {str(e)}")
         return None
 
 # ------------------------------------------
