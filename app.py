@@ -887,10 +887,10 @@ with tab2:
             else:
               with st.spinner("Generando y unificando el PDF de Auditoría..."):
                 carpeta_base = "./Registros_Oficiales"
-                planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace("\", "_")
-                tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace("\", "_")
-                nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace("\", "_")
-                lote_safe = str(row.get("LoteProveedor", "Lote")).replace("/", "_").replace("\", "_")
+                planta_safe = str(row.get("Planta", "Planta")).replace("/", "_").replace(chr(92), "_")
+                tipo_mat_safe = str(row.get("TipoMaterial", "Tipo")).replace("/", "_").replace(chr(92), "_")
+                nombre_mat_safe = str(row.get("NombreMaterial", "Material")).replace("/", "_").replace(chr(92), "_")
+                lote_safe = str(row.get("LoteProveedor", "Lote")).replace("/", "_").replace(chr(92), "_")
                 fecha_safe = str(row.get("IngresoSAP", "")).replace("/", "-")
                 
                 nombre_base_archivo = f"{nombre_mat_safe}_{lote_safe}_{fecha_safe}"
@@ -1097,16 +1097,13 @@ with tab5:
         st.download_button("📥 Descargar Base Completa (Excel)", data=output.getvalue(), file_name=f"Control_LIF_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
 
     with col_dl2:
-        # Opción para comprimir y descargar TODOS los PDFs y Certificados en un archivo ZIP
         if st.button("📦 Descargar Todos los Certificados y PDFs (ZIP)", type="secondary"):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                # Recorrer la carpeta de registros oficiales y agregar todos los archivos
                 if os.path.exists("./Registros_Oficiales"):
                     for root, dirs, files in os.walk("./Registros_Oficiales"):
                         for file in files:
                             ruta_completa = os.path.join(root, file)
-                            # Ruta relativa para la estructura dentro del ZIP
                             ruta_relativa = os.path.relpath(ruta_completa, "./Registros_Oficiales")
                             zip_file.write(ruta_completa, ruta_relativa)
             
