@@ -607,7 +607,7 @@ if os.path.exists(ARCHIVO_CATALOGO):
   except Exception as e:
     st.error(f"Error al leer el catálogo: {e}")
 
-st.sidebar.header("⚙️ Configuración y Base de Datos")
+st.sidebar.header("⚙️ Configuración y Respaldo de Base de Datos")
 archivo_catalogo_nuevo = st.sidebar.file_uploader("Actualizar Catálogo", type=["xlsx"])
 if archivo_catalogo_nuevo is not None:
   with open(ARCHIVO_CATALOGO, "wb") as f:
@@ -615,6 +615,26 @@ if archivo_catalogo_nuevo is not None:
   df_db = pd.read_excel(ARCHIVO_CATALOGO)
   df_db.columns = df_db.columns.str.strip()
   st.sidebar.success("¡Catálogo actualizado!")
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🛡️ Respaldo SQLite")
+# Botón para descargar la base de datos completa y llevarla a tu PC
+if os.path.exists(DB_NAME):
+    with open(DB_NAME, "rb") as db_file:
+        st.sidebar.download_button(
+            label="📥 Descargar Base de Datos (.db)",
+            data=db_file,
+            file_name="registros_lif.db",
+            mime="application/octet-stream"
+        )
+
+# Opción para restaurar o subir una base de datos previa si se reinicia el servidor
+db_subida = st.sidebar.file_uploader("Subir Base de Datos previa (.db)", type=["db"])
+if db_subida is not None:
+    with open(DB_NAME, "wb") as f:
+        f.write(db_subida.getbuffer())
+    st.sidebar.success("¡Base de datos restaurada correctamente!")
+    st.rerun()
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📝 1. Ingreso de Operador", "✍️ 2. Panel de Calidad", "🔍 3. Trazabilidad", "📁 4. Explorador de Archivos", "📊 5. Control Excel"
